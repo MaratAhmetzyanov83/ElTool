@@ -20,6 +20,7 @@ namespace ElTools.Integrations;
 public class SpecExportService
 {
     private readonly LogService _log = new();
+    private readonly IExcelGateway _excelGateway = new CsvExcelGateway();
 
     public string ToCsv(IReadOnlyList<SpecificationRow> rows, string? path = null)
     {
@@ -39,5 +40,23 @@ public class SpecExportService
         _ = rows;
         _log.Write("Экспорт в таблицу AutoCAD будет реализован в следующей итерации.");
         // END_BLOCK_EXPORT_TO_AUTOCAD_TABLE
+    }
+
+    public string ToExcelInput(string templatePath, IReadOnlyList<ExcelInputRow> rows)
+    {
+        // START_BLOCK_EXPORT_TO_EXCEL_INPUT
+        _excelGateway.WriteInputRows(templatePath, rows);
+        _log.Write($"Excel INPUT экспортирован на основе шаблона: {templatePath}");
+        return templatePath;
+        // END_BLOCK_EXPORT_TO_EXCEL_INPUT
+    }
+
+    public IReadOnlyList<ExcelOutputRow> FromExcelOutput(string templatePath)
+    {
+        // START_BLOCK_IMPORT_FROM_EXCEL_OUTPUT
+        IReadOnlyList<ExcelOutputRow> rows = _excelGateway.ReadOutputRows(templatePath);
+        _log.Write($"Excel OUTPUT импортирован. Строк: {rows.Count}.");
+        return rows;
+        // END_BLOCK_IMPORT_FROM_EXCEL_OUTPUT
     }
 }
