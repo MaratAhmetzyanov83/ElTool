@@ -39,6 +39,7 @@ public class CommandRegistry
     private readonly SettingsRepository _settings = new();
     private readonly XDataService _xdata = new();
     private readonly AutoCADAdapter _acad = new();
+    private readonly AttributeService _attributes = new();
 
     public CommandRegistry()
     {
@@ -256,8 +257,8 @@ public class CommandRegistry
     public void EomUpdate()
     {
         // START_BLOCK_COMMAND_EOM_UPDATE
-        EomTrace();
-        _log.Write("EOM_ОБНОВИТЬ завершена.");
+        IReadOnlyList<GroupTraceAggregate> aggregates = _trace.RecalculateByGroups();
+        _log.Write($"EOM_ОБНОВИТЬ завершена. Групп в расчете: {aggregates.Count}.");
         // END_BLOCK_COMMAND_EOM_UPDATE
     }
 
@@ -265,9 +266,9 @@ public class CommandRegistry
     public void EomExportExcel()
     {
         // START_BLOCK_COMMAND_EOM_EXPORT_EXCEL
-        IReadOnlyList<SpecificationRow> specRows = _spec.BuildSpecification(Array.Empty<ObjectId>());
+        IReadOnlyList<GroupTraceAggregate> aggregates = _trace.RecalculateByGroups();
         string templatePath = _settings.LoadSettings().ExcelTemplatePath;
-        var inputRows = specRows.Select(ToExcelInputRow).ToList();
+        var inputRows = aggregates.Select(ToExcelInputRow).ToList();
         _export.ToExcelInput(templatePath, inputRows);
         _log.Write("EOM_ЭКСПОРТ_EXCEL завершена.");
         // END_BLOCK_COMMAND_EOM_EXPORT_EXCEL
@@ -315,6 +316,10 @@ public class CommandRegistry
         }
 
         int missingGroupLines = 0;
+        int missingGroupLoads = 0;
+        int invalidPowerLoads = 0;
+        int groupShieldMismatch = 0;
+        var shieldsByGroup = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
         using (doc.LockDocument())
         using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
         {
@@ -322,22 +327,61 @@ public class CommandRegistry
             var modelSpace = (BlockTableRecord)tr.GetObject(blockTable[BlockTableRecord.ModelSpace], OpenMode.ForRead);
             foreach (ObjectId id in modelSpace)
             {
-                if (tr.GetObject(id, OpenMode.ForRead) is not Entity entity || entity is not (Line or Polyline))
+                if (tr.GetObject(id, OpenMode.ForRead) is not Entity entity)
                 {
                     continue;
                 }
 
-                string? group = _xdata.GetLineGroup(id);
-                if (string.IsNullOrWhiteSpace(group))
+                if (entity is Line or Polyline)
                 {
-                    missingGroupLines++;
+                    string? lineGroup = _xdata.GetLineGroup(id);
+                    if (string.IsNullOrWhiteSpace(lineGroup))
+                    {
+                        missingGroupLines++;
+                    }
+                }
+
+                if (entity is BlockReference)
+                {
+                    IReadOnlyDictionary<string, string> attrs = _attributes.ReadAttributes(id);
+                    if (attrs.Count == 0)
+                    {
+                        continue;
+                    }
+
+                    attrs.TryGetValue(PluginConfig.AttributeTags.Group, out string? group);
+                    attrs.TryGetValue(PluginConfig.AttributeTags.Power, out string? power);
+                    attrs.TryGetValue(PluginConfig.AttributeTags.Shield, out string? shield);
+
+                    if (string.IsNullOrWhiteSpace(group))
+                    {
+                        missingGroupLoads++;
+                        continue;
+                    }
+
+                    if (string.IsNullOrWhiteSpace(power) || !double.TryParse(power.Replace(',', '.'), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out _))
+                    {
+                        invalidPowerLoads++;
+                    }
+
+                    if (!shieldsByGroup.TryGetValue(group.Trim(), out HashSet<string>? shields))
+                    {
+                        shields = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                        shieldsByGroup[group.Trim()] = shields;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(shield))
+                    {
+                        shields.Add(shield.Trim());
+                    }
                 }
             }
 
             tr.Commit();
         }
 
-        _log.Write($"EOM_ПРОВЕРКА: линий без ГРУППА: {missingGroupLines}.");
+        groupShieldMismatch = shieldsByGroup.Values.Count(x => x.Count > 1);
+        _log.Write($"EOM_ПРОВЕРКА: линии без ГРУППА={missingGroupLines}; нагрузки без ГРУППА={missingGroupLoads}; МОЩНОСТЬ нечисловая={invalidPowerLoads}; несовпадение ЩИТ внутри группы={groupShieldMismatch}.");
         // END_BLOCK_COMMAND_EOM_VALIDATE
     }
 
@@ -348,24 +392,33 @@ public class CommandRegistry
         // END_BLOCK_ON_OBJECT_APPENDED
     }
 
-    private static ExcelInputRow ToExcelInputRow(SpecificationRow row)
+    private static ExcelInputRow ToExcelInputRow(GroupTraceAggregate row)
     {
         // START_BLOCK_TO_EXCEL_INPUT_ROW
         string group = row.Group;
-        double total = row.TotalLength;
-        double ceiling = row.CableType.Equals("Потолок", StringComparison.OrdinalIgnoreCase) ? total : 0;
-        double floor = row.CableType.Equals("Пол", StringComparison.OrdinalIgnoreCase) ? total : 0;
-        double riser = row.CableType.Equals("Стояк", StringComparison.OrdinalIgnoreCase) ? total : 0;
+        double total = row.TotalLengthMeters;
+        double ceiling = GetInstallTypeLength(row, "Потолок");
+        double floor = GetInstallTypeLength(row, "Пол");
+        double riser = GetInstallTypeLength(row, "Стояк");
 
         return new ExcelInputRow(
-            Shield: string.Empty,
+            Shield: row.Shield,
             Group: group,
-            PowerKw: 0,
+            PowerKw: Math.Round(row.TotalPowerWatts / 1000d, 3),
             Voltage: 0,
             TotalLengthMeters: total,
             CeilingLengthMeters: ceiling,
             FloorLengthMeters: floor,
             RiserLengthMeters: riser);
         // END_BLOCK_TO_EXCEL_INPUT_ROW
+    }
+
+    private static double GetInstallTypeLength(GroupTraceAggregate aggregate, string installType)
+    {
+        // START_BLOCK_GET_INSTALL_TYPE_LENGTH
+        return aggregate.LengthByInstallType.TryGetValue(installType, out double value)
+            ? Math.Round(value, 3)
+            : 0;
+        // END_BLOCK_GET_INSTALL_TYPE_LENGTH
     }
 }

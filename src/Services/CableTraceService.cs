@@ -12,13 +12,20 @@
 // END_MODULE_MAP
 
 using ElTools.Models;
+using ElTools.Data;
+using ElTools.Integrations;
+using ElTools.Shared;
 
 namespace ElTools.Services;
 
 public class CableTraceService
 {
+    private readonly AutoCADAdapter _acad = new();
     private readonly GeometryService _geometry = new();
     private readonly AttributeService _attributes = new();
+    private readonly XDataService _xdata = new();
+    private readonly SettingsRepository _settings = new();
+    private readonly IInstallTypeResolver _installTypeResolver = new InstallTypeResolver();
     private readonly LogService _log = new();
     private const string HeightTag = "ВЫСОТА_УСТАНОВКИ";
 
@@ -76,6 +83,93 @@ public class CableTraceService
         _log.Write($"Трассировка завершена. Длина: {result?.TotalLength:0.###} м.");
         return result;
         // END_BLOCK_EXECUTE_TRACE_FROM_BASE
+    }
+
+    public IReadOnlyList<GroupTraceAggregate> RecalculateByGroups()
+    {
+        // START_BLOCK_RECALCULATE_BY_GROUPS
+        Document? doc = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
+        if (doc is null)
+        {
+            return [];
+        }
+
+        _ = _settings.LoadSettings();
+        InstallTypeRuleSet rules = _settings.LoadInstallTypeRules();
+        var aggregates = new Dictionary<string, MutableAggregate>(StringComparer.OrdinalIgnoreCase);
+        int defaultInstallTypeLines = 0;
+
+        using (doc.LockDocument())
+        using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
+        {
+            var blockTable = (BlockTable)tr.GetObject(doc.Database.BlockTableId, OpenMode.ForRead);
+            var modelSpace = (BlockTableRecord)tr.GetObject(blockTable[BlockTableRecord.ModelSpace], OpenMode.ForRead);
+
+            foreach (ObjectId id in modelSpace)
+            {
+                if (tr.GetObject(id, OpenMode.ForRead) is not Entity entity)
+                {
+                    continue;
+                }
+
+                if (entity is BlockReference block)
+                {
+                    RegisterLoadBlock(aggregates, block.ObjectId);
+                    continue;
+                }
+
+                if (entity is not (Line or Polyline))
+                {
+                    continue;
+                }
+
+                string? group = _xdata.GetLineGroup(id);
+                if (string.IsNullOrWhiteSpace(group))
+                {
+                    continue;
+                }
+
+                string linetypeResolved = _acad.ResolveLinetype(entity);
+                string installType = _installTypeResolver.Resolve(linetypeResolved, entity.Layer, rules);
+                if (string.Equals(installType, rules.Default, StringComparison.OrdinalIgnoreCase))
+                {
+                    defaultInstallTypeLines++;
+                }
+
+                double length = entity switch
+                {
+                    Line line => line.Length,
+                    Polyline polyline => polyline.Length,
+                    _ => 0
+                };
+
+                string key = $"|{group.Trim()}";
+                if (!aggregates.TryGetValue(key, out MutableAggregate? aggregate))
+                {
+                    aggregate = new MutableAggregate(string.Empty, group.Trim());
+                    aggregates[key] = aggregate;
+                }
+
+                aggregate.TotalLength += Math.Round(length, 3);
+                aggregate.LengthByInstallType.TryGetValue(installType, out double current);
+                aggregate.LengthByInstallType[installType] = Math.Round(current + length, 3);
+            }
+
+            tr.Commit();
+        }
+
+        _log.Write($"[CableTraceService][RecalculateByGroups][RECALCULATE] Групп: {aggregates.Count}, линий Default: {defaultInstallTypeLines}.");
+        return aggregates.Values
+            .Select(a => new GroupTraceAggregate(
+                a.Shield,
+                a.Group,
+                Math.Round(a.TotalPowerWatts, 3),
+                Math.Round(a.TotalLength, 3),
+                new Dictionary<string, double>(a.LengthByInstallType)))
+            .OrderBy(a => a.Shield)
+            .ThenBy(a => a.Group)
+            .ToList();
+        // END_BLOCK_RECALCULATE_BY_GROUPS
     }
 
     private static Polyline BuildOrthogonalBranchPolyline(Polyline basePolyline, Point3d splitPoint, Point3d targetPoint)
@@ -156,5 +250,51 @@ public class CableTraceService
 
         return double.TryParse(raw, out double value) ? value : 0;
         // END_BLOCK_READ_HEIGHT
+    }
+
+    private void RegisterLoadBlock(IDictionary<string, MutableAggregate> aggregates, ObjectId blockId)
+    {
+        // START_BLOCK_REGISTER_LOAD_BLOCK
+        IReadOnlyDictionary<string, string> attributes = _attributes.ReadAttributes(blockId);
+        if (!attributes.TryGetValue(PluginConfig.AttributeTags.Group, out string? group) || string.IsNullOrWhiteSpace(group))
+        {
+            return;
+        }
+
+        if (!attributes.TryGetValue(PluginConfig.AttributeTags.Shield, out string? shield))
+        {
+            shield = string.Empty;
+        }
+
+        double power = 0;
+        if (attributes.TryGetValue(PluginConfig.AttributeTags.Power, out string? powerRaw))
+        {
+            _ = double.TryParse(powerRaw?.Replace(',', '.'), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out power);
+        }
+
+        string key = $"{shield}|{group.Trim()}";
+        if (!aggregates.TryGetValue(key, out MutableAggregate? aggregate))
+        {
+            aggregate = new MutableAggregate(shield?.Trim() ?? string.Empty, group.Trim());
+            aggregates[key] = aggregate;
+        }
+
+        aggregate.TotalPowerWatts += Math.Max(power, 0);
+        // END_BLOCK_REGISTER_LOAD_BLOCK
+    }
+
+    private sealed class MutableAggregate
+    {
+        public MutableAggregate(string shield, string group)
+        {
+            Shield = shield;
+            Group = group;
+        }
+
+        public string Shield { get; }
+        public string Group { get; }
+        public double TotalPowerWatts { get; set; }
+        public double TotalLength { get; set; }
+        public Dictionary<string, double> LengthByInstallType { get; } = new(StringComparer.OrdinalIgnoreCase);
     }
 }
