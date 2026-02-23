@@ -27,8 +27,14 @@ public class SpecificationService
         // START_BLOCK_BUILD_SPECIFICATION
         _ = _settings.LoadSettings();
 
+        List<ObjectId> sourceIds = entityIds.ToList();
+        if (sourceIds.Count == 0)
+        {
+            sourceIds = CollectModelSpaceEntityIds();
+        }
+
         var records = new List<EomDataRecord>();
-        foreach (ObjectId id in entityIds)
+        foreach (ObjectId id in sourceIds)
         {
             EomDataRecord? item = _xdata.ReadEomData(id);
             if (item is not null)
@@ -47,5 +53,28 @@ public class SpecificationService
         _log.Write($"Спецификация собрана. Строк: {grouped.Count}.");
         return grouped;
         // END_BLOCK_BUILD_SPECIFICATION
+    }
+
+    private static List<ObjectId> CollectModelSpaceEntityIds()
+    {
+        // START_BLOCK_COLLECT_MODEL_SPACE_ENTITY_IDS
+        Document? doc = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
+        if (doc is null)
+        {
+            return [];
+        }
+
+        var ids = new List<ObjectId>();
+        using (doc.LockDocument())
+        using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
+        {
+            var blockTable = (BlockTable)tr.GetObject(doc.Database.BlockTableId, OpenMode.ForRead);
+            var modelSpace = (BlockTableRecord)tr.GetObject(blockTable[BlockTableRecord.ModelSpace], OpenMode.ForRead);
+            ids.AddRange(modelSpace.Cast<ObjectId>());
+            tr.Commit();
+        }
+
+        return ids;
+        // END_BLOCK_COLLECT_MODEL_SPACE_ENTITY_IDS
     }
 }

@@ -21,6 +21,8 @@ namespace ElTools.Integrations;
 
 public class AutoCADAdapter
 {
+    private readonly HashSet<string> _subscribedDocuments = new(StringComparer.OrdinalIgnoreCase);
+
     public Document? GetActiveDocument()
     {
         // START_BLOCK_GET_ACTIVE_DOCUMENT
@@ -55,5 +57,57 @@ public class AutoCADAdapter
 
         return point.TransformBy(doc.Editor.CurrentUserCoordinateSystem);
         // END_BLOCK_UCS_TO_WCS
+    }
+
+    public void SubscribeObjectAppended(Action<ObjectId> callback)
+    {
+        // START_BLOCK_SUBSCRIBE_OBJECT_APPENDED
+        Document? doc = GetActiveDocument();
+        if (doc is null)
+        {
+            return;
+        }
+
+        string key = string.IsNullOrWhiteSpace(doc.Name) ? doc.Database.FingerprintGuid.ToString() : doc.Name;
+        if (_subscribedDocuments.Contains(key))
+        {
+            return;
+        }
+
+        doc.Database.ObjectAppended += (_, args) => callback(args.DBObject.ObjectId);
+        _subscribedDocuments.Add(key);
+        // END_BLOCK_SUBSCRIBE_OBJECT_APPENDED
+    }
+
+    public string ResolveLinetype(Entity entity)
+    {
+        // START_BLOCK_RESOLVE_LINETYPE
+        if (!string.Equals(entity.Linetype, "ByLayer", StringComparison.OrdinalIgnoreCase))
+        {
+            return entity.Linetype;
+        }
+
+        string resolved = entity.Linetype;
+        RunTransaction((tr, db) =>
+        {
+            LayerTable layerTable = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
+            if (!layerTable.Has(entity.Layer))
+            {
+                return;
+            }
+
+            LayerTableRecord layer = (LayerTableRecord)tr.GetObject(layerTable[entity.Layer], OpenMode.ForRead);
+            if (layer.LinetypeObjectId.IsNull)
+            {
+                resolved = "Continuous";
+                return;
+            }
+
+            LinetypeTableRecord linetype = (LinetypeTableRecord)tr.GetObject(layer.LinetypeObjectId, OpenMode.ForRead);
+            resolved = linetype.Name;
+        });
+
+        return string.IsNullOrWhiteSpace(resolved) ? "Continuous" : resolved;
+        // END_BLOCK_RESOLVE_LINETYPE
     }
 }
