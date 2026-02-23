@@ -13,6 +13,10 @@
 //   EomSpec - Executes specification workflow.
 //   EomMapCfg - Opens mapping configuration window.
 // END_MODULE_MAP
+//
+// START_CHANGE_SUMMARY
+//   LAST_CHANGE: v1.1.0 - Updated EOM_MAP to direct source/target selection and replacement without attribute transfer.
+// END_CHANGE_SUMMARY
 
 using Autodesk.AutoCAD.Runtime;
 using ElTools.Integrations;
@@ -41,7 +45,35 @@ public class CommandRegistry
             return;
         }
 
-        int replaced = _mapping.ExecuteMapping(Array.Empty<ObjectId>());
+        Document? doc = Application.DocumentManager.MdiActiveDocument;
+        if (doc is null)
+        {
+            _log.Write("Активный документ не найден.");
+            return;
+        }
+
+        Editor editor = doc.Editor;
+        var sourceOptions = new PromptEntityOptions("\nУкажите исходный блок для замены: ");
+        sourceOptions.SetRejectMessage("\nНужен блок (BlockReference).");
+        sourceOptions.AddAllowedClass(typeof(BlockReference), true);
+        PromptEntityResult sourceResult = editor.GetEntity(sourceOptions);
+        if (sourceResult.Status != PromptStatus.OK)
+        {
+            _log.Write("Команда отменена: исходный блок не выбран.");
+            return;
+        }
+
+        var targetOptions = new PromptEntityOptions("\nУкажите целевой блок: ");
+        targetOptions.SetRejectMessage("\nНужен блок (BlockReference).");
+        targetOptions.AddAllowedClass(typeof(BlockReference), true);
+        PromptEntityResult targetResult = editor.GetEntity(targetOptions);
+        if (targetResult.Status != PromptStatus.OK)
+        {
+            _log.Write("Команда отменена: целевой блок не выбран.");
+            return;
+        }
+
+        int replaced = _mapping.ExecuteMapping(sourceResult.ObjectId, targetResult.ObjectId);
         _log.Write($"EOM_MAP завершена. Заменено блоков: {replaced}.");
         // END_BLOCK_COMMAND_EOM_MAP
     }

@@ -14,7 +14,6 @@
 using System.Windows.Input;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.Windows;
-using ElTools.Commands;
 using ElTools.Services;
 
 namespace ElTools.Core;
@@ -42,10 +41,9 @@ public class RibbonBuilder
 
         var tab = new RibbonTab { Id = TabId, Title = "ЭОМ ПРО" };
         var panelSource = new RibbonPanelSource { Title = "Инструменты" };
-        panelSource.Items.Add(CreateButton("Замена блоков", "EOM_MAP ", "Замена блоков по профилю соответствия."));
-        panelSource.Items.Add(CreateButton("Настройка маппинга", "EOM_MAPCFG ", "Открыть окно настройки правил соответствия блоков."));
-        panelSource.Items.Add(CreateButton("Трассировка", "EOM_TRACE ", "Трассировка кабеля и расчет длины."));
-        panelSource.Items.Add(CreateButton("Спецификация", "EOM_SPEC ", "Формирование спецификации по EOM_DATA."));
+        panelSource.Items.Add(CreateButton("Замена блоков", "_.EOM_MAP ", "Выберите исходный блок, затем целевой блок для массовой замены."));
+        panelSource.Items.Add(CreateButton("Трассировка", "_.EOM_TRACE ", "Трассировка кабеля и расчет длины."));
+        panelSource.Items.Add(CreateButton("Спецификация", "_.EOM_SPEC ", "Формирование спецификации по EOM_DATA."));
 
         tab.Panels.Add(new RibbonPanel { Source = panelSource });
         ribbon.Tabs.Add(tab);
@@ -91,37 +89,11 @@ public class RibbonBuilder
                 return;
             }
 
-            string normalized = command.Trim().ToUpperInvariant();
-            var commands = new CommandRegistry();
-
-            if (normalized == "EOM_MAPCFG")
-            {
-                commands.EomMapCfg();
-                return;
-            }
-
-            if (normalized == "EOM_MAP")
-            {
-                commands.EomMap();
-                return;
-            }
-
-            if (normalized == "EOM_TRACE")
-            {
-                commands.EomTrace();
-                return;
-            }
-
-            if (normalized == "EOM_SPEC")
-            {
-                commands.EomSpec();
-                return;
-            }
-
             Document? doc = Application.DocumentManager.MdiActiveDocument;
             if (doc is not null)
             {
-                doc.SendStringToExecute(command, true, false, true);
+                string macro = command.EndsWith(" ", StringComparison.Ordinal) ? command : command + " ";
+                doc.SendStringToExecute(macro, true, false, false);
             }
             // END_BLOCK_RIBBON_EXECUTE
         }
