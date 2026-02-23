@@ -1,0 +1,39 @@
+﻿<TechnologyStack VERSION="0.1.0">
+  <!-- Runtime and language -->
+  <Runtime>.NET 8.0</Runtime>
+  <Language>C# 12</Language>
+
+  <!-- Framework (if applicable) -->
+  <Framework>AutoCAD 2025 SDK (совместимость с AutoCAD 2025+)</Framework>
+
+  <!-- Key libraries and dependencies -->
+  <Dependencies>
+    <dep name="AutoCAD.NET" version="25.0.0+" purpose="AutoCAD managed API: AcMgd/AcDbMgd/AcCoreMgd bindings" />
+    <dep name="CommunityToolkit.Mvvm" version="latest-compatible" purpose="MVVM support for WPF UI" />
+    <dep name="System.Management" version="built-in" purpose="Hardware ID licensing checks" />
+    <dep name="Newtonsoft.Json" version="latest-compatible" purpose="Mapping settings persistence" />
+    <!-- List significant dependencies with exact versions:
+         <dep name="library-name" version="1.2.3" purpose="What it's used for" />
+    -->
+  </Dependencies>
+
+  <!-- Version constraints -->
+  <VersionConstraints>
+    <constraint lib="AutoCAD SDK" min="2025" max="2025+" reason="Plugin targets AutoCAD .NET 8 architecture (Out-of-process/In-process)" />
+    <constraint lib=".NET" min="8.0.0" max="8.x" reason="Project runtime baseline" />
+    <constraint lib="C#" min="12.0" max="12.x" reason="Language features baseline" />
+    <!-- Critical: specify exact versions to prevent AI from generating code for wrong API versions.
+         Example:
+         <constraint lib="react" min="18.0.0" max="18.x" reason="Using React 18 concurrent features" />
+    -->
+  </VersionConstraints>
+
+  <!-- Build and tooling -->
+  <Tooling>
+    <!-- <tool name="bundler" value="vite" version="5.x" />
+         <tool name="test-runner" value="vitest" version="1.x" />
+         <tool name="linter" value="eslint" version="9.x" />
+    -->
+  </Tooling>
+</TechnologyStack>
+

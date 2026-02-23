@@ -1,0 +1,384 @@
+﻿<DevelopmentPlan VERSION="0.1.0">
+  <Modules>
+    <M-ACAD NAME="AutoCADAdapter" TYPE="INTEGRATION" LAYER="0" ORDER="1">
+      <contract>
+        <purpose>Provide safe access to AutoCAD document, editor, database, transactions, and coordinate conversions.</purpose>
+        <inputs>
+          <param name="request" type="AutoCAD context" />
+        </inputs>
+        <outputs>
+          <param name="result" type="AutoCAD primitives" />
+        </outputs>
+        <errors>
+          <error code="ACAD_CONTEXT_UNAVAILABLE" />
+        </errors>
+      </contract>
+      <interface>
+        <export-getActiveDocument PURPOSE="Get active AutoCAD document" />
+        <export-runTransaction PURPOSE="Execute action in transaction" />
+        <export-ucsToWcs PURPOSE="Convert geometry from UCS to WCS" />
+      </interface>
+      <depends>none</depends>
+    </M-ACAD>
+
+    <M-JSON NAME="JsonAdapter" TYPE="INTEGRATION" LAYER="0" ORDER="2">
+      <contract>
+        <purpose>Serialize and deserialize plugin settings using Newtonsoft.Json.</purpose>
+        <inputs>
+          <param name="payload" type="object|string" />
+        </inputs>
+        <outputs>
+          <param name="json-or-model" type="string|object" />
+        </outputs>
+        <errors>
+          <error code="JSON_PARSE_ERROR" />
+        </errors>
+      </contract>
+      <interface>
+        <export-serialize PURPOSE="Serialize object to JSON" />
+        <export-deserialize PURPOSE="Deserialize JSON to typed model" />
+      </interface>
+      <depends>none</depends>
+    </M-JSON>
+
+    <M-SYSMGMT NAME="HardwareProbeAdapter" TYPE="INTEGRATION" LAYER="0" ORDER="3">
+      <contract>
+        <purpose>Read hardware identifiers via System.Management for licensing.</purpose>
+        <inputs>
+          <param name="probe" type="machine request" />
+        </inputs>
+        <outputs>
+          <param name="hardware-id" type="string" />
+        </outputs>
+        <errors>
+          <error code="WMI_QUERY_FAILED" />
+        </errors>
+      </contract>
+      <interface>
+        <export-getHardwareId PURPOSE="Read stable hardware identifier" />
+      </interface>
+      <depends>none</depends>
+    </M-SYSMGMT>
+
+    <M-LOG NAME="LogService" TYPE="UTILITY" LAYER="1" ORDER="1">
+      <contract>
+        <purpose>Write operational diagnostics to AutoCAD editor and optional sinks.</purpose>
+        <inputs>
+          <param name="message" type="string" />
+        </inputs>
+        <outputs>
+          <param name="log-record" type="diagnostic record" />
+        </outputs>
+        <errors>
+          <error code="LOG_WRITE_FAILED" />
+        </errors>
+      </contract>
+      <interface>
+        <export-write PURPOSE="Write contextual log message" />
+      </interface>
+      <depends>M-ACAD</depends>
+    </M-LOG>
+
+    <M-SETTINGS NAME="SettingsRepository" TYPE="DATA_LAYER" LAYER="1" ORDER="2">
+      <contract>
+        <purpose>Load and save Settings.json and plugin profiles.</purpose>
+        <inputs>
+          <param name="settings" type="settings model" />
+        </inputs>
+        <outputs>
+          <param name="settings" type="settings model" />
+        </outputs>
+        <errors>
+          <error code="SETTINGS_IO_FAILED" />
+        </errors>
+      </contract>
+      <interface>
+        <export-loadSettings PURPOSE="Load settings from file" />
+        <export-saveSettings PURPOSE="Save settings to file" />
+      </interface>
+      <depends>M-JSON, M-LOG</depends>
+    </M-SETTINGS>
+
+    <M-LICENSE NAME="LicenseService" TYPE="UTILITY" LAYER="2" ORDER="1">
+      <contract>
+        <purpose>Validate license state before command execution.</purpose>
+        <inputs>
+          <param name="context" type="command context" />
+        </inputs>
+        <outputs>
+          <param name="state" type="valid|invalid|expired|disabled" />
+        </outputs>
+        <errors>
+          <error code="LICENSE_INVALID" />
+        </errors>
+      </contract>
+      <interface>
+        <export-validate PURPOSE="Validate command access by license" />
+      </interface>
+      <depends>M-SYSMGMT, M-SETTINGS, M-LOG</depends>
+    </M-LICENSE>
+
+    <M-ATTR NAME="AttributeService" TYPE="CORE_LOGIC" LAYER="2" ORDER="2">
+      <contract>
+        <purpose>Read and write block attributes with robust Cyrillic support.</purpose>
+        <inputs>
+          <param name="block-id" type="ObjectId" />
+        </inputs>
+        <outputs>
+          <param name="attributes" type="key-value map" />
+        </outputs>
+        <errors>
+          <error code="ATTRIBUTE_ACCESS_FAILED" />
+        </errors>
+      </contract>
+      <interface>
+        <export-readAttributes PURPOSE="Read attribute map from block" />
+        <export-writeAttributes PURPOSE="Write attribute map to block" />
+      </interface>
+      <depends>M-ACAD</depends>
+    </M-ATTR>
+
+    <M-GEOM NAME="GeometryService" TYPE="CORE_LOGIC" LAYER="2" ORDER="3">
+      <contract>
+        <purpose>Compute lengths and geometry metrics with mandatory UCS to WCS normalization.</purpose>
+        <inputs>
+          <param name="route" type="curve|polyline" />
+          <param name="heights" type="source and target elevations" />
+        </inputs>
+        <outputs>
+          <param name="length" type="double" />
+        </outputs>
+        <errors>
+          <error code="GEOMETRY_CALC_FAILED" />
+        </errors>
+      </contract>
+      <interface>
+        <export-normalizeUcsToWcs PURPOSE="Normalize geometry coordinates to WCS" />
+        <export-calculateCableLength PURPOSE="Calculate L_total = L_2d + ABS(H1-H2) + 5%" />
+      </interface>
+      <depends>M-ACAD</depends>
+    </M-GEOM>
+
+    <M-XDATA NAME="XDataService" TYPE="CORE_LOGIC" LAYER="2" ORDER="4">
+      <contract>
+        <purpose>Read and write structured XData with application key EOM_DATA.</purpose>
+        <inputs>
+          <param name="entity-id" type="ObjectId" />
+          <param name="payload" type="xdata model" />
+        </inputs>
+        <outputs>
+          <param name="payload" type="xdata model" />
+        </outputs>
+        <errors>
+          <error code="XDATA_ACCESS_FAILED" />
+        </errors>
+      </contract>
+      <interface>
+        <export-readEomData PURPOSE="Read EOM_DATA payload" />
+        <export-writeEomData PURPOSE="Write EOM_DATA payload" />
+      </interface>
+      <depends>M-ACAD</depends>
+    </M-XDATA>
+
+    <M-MAP NAME="BlockMappingService" TYPE="CORE_LOGIC" LAYER="3" ORDER="1">
+      <contract>
+        <purpose>Replace designer blocks by organization-standard blocks using mapping rules from settings.</purpose>
+        <inputs>
+          <param name="selection" type="block selection" />
+          <param name="profile" type="mapping profile" />
+        </inputs>
+        <outputs>
+          <param name="report" type="replacement report" />
+        </outputs>
+        <errors>
+          <error code="MAPPING_EXECUTION_FAILED" />
+        </errors>
+      </contract>
+      <interface>
+        <export-executeMapping PURPOSE="Execute mapping for selected blocks" />
+      </interface>
+      <depends>M-SETTINGS, M-ATTR, M-ACAD, M-LOG</depends>
+    </M-MAP>
+
+    <M-TRACE NAME="CableTraceService" TYPE="CORE_LOGIC" LAYER="3" ORDER="2">
+      <contract>
+        <purpose>Trace selected route and compute cable length including vertical delta and reserve.</purpose>
+        <inputs>
+          <param name="polyline" type="route polyline" />
+          <param name="endpoints" type="source and consumer blocks" />
+        </inputs>
+        <outputs>
+          <param name="trace-result" type="length and cable metadata" />
+        </outputs>
+        <errors>
+          <error code="TRACE_FAILED" />
+        </errors>
+      </contract>
+      <interface>
+        <export-executeTrace PURPOSE="Execute trace workflow and persist EOM_DATA" />
+      </interface>
+      <depends>M-GEOM, M-ATTR, M-XDATA, M-LOG</depends>
+    </M-TRACE>
+
+    <M-SPEC NAME="SpecificationService" TYPE="CORE_LOGIC" LAYER="4" ORDER="1">
+      <contract>
+        <purpose>Scan drawing EOM_DATA and aggregate cable lengths by type and group.</purpose>
+        <inputs>
+          <param name="scope" type="drawing scope" />
+        </inputs>
+        <outputs>
+          <param name="dataset" type="specification dataset" />
+        </outputs>
+        <errors>
+          <error code="SPEC_BUILD_FAILED" />
+        </errors>
+      </contract>
+      <interface>
+        <export-buildSpecification PURPOSE="Build aggregated specification dataset" />
+      </interface>
+      <depends>M-XDATA, M-SETTINGS, M-LOG</depends>
+    </M-SPEC>
+
+    <M-EXPORT NAME="SpecExportService" TYPE="INTEGRATION" LAYER="5" ORDER="1">
+      <contract>
+        <purpose>Export specification dataset to AutoCAD table and CSV.</purpose>
+        <inputs>
+          <param name="dataset" type="specification dataset" />
+          <param name="target" type="table|csv" />
+        </inputs>
+        <outputs>
+          <param name="result" type="export status" />
+        </outputs>
+        <errors>
+          <error code="EXPORT_FAILED" />
+        </errors>
+      </contract>
+      <interface>
+        <export-toAutoCadTable PURPOSE="Render specification into AutoCAD table" />
+        <export-toCsv PURPOSE="Save specification as CSV file" />
+      </interface>
+      <depends>M-SPEC, M-ACAD, M-LOG</depends>
+    </M-EXPORT>
+
+    <M-COMMANDS NAME="CommandRegistry" TYPE="ENTRY_POINT" LAYER="6" ORDER="1">
+      <contract>
+        <purpose>Register AutoCAD commands and dispatch to domain services.</purpose>
+        <inputs>
+          <param name="command" type="EOM_MAP|EOM_TRACE|EOM_SPEC" />
+        </inputs>
+        <outputs>
+          <param name="status" type="command status" />
+        </outputs>
+        <errors>
+          <error code="COMMAND_DISPATCH_FAILED" />
+        </errors>
+      </contract>
+      <interface>
+        <export-registerCommands PURPOSE="Register EOM_MAP, EOM_TRACE, EOM_SPEC" />
+        <export-dispatch PURPOSE="Dispatch command execution" />
+      </interface>
+      <depends>M-MAP, M-TRACE, M-SPEC, M-EXPORT, M-LICENSE, M-LOG</depends>
+    </M-COMMANDS>
+
+    <M-RIBBON NAME="RibbonManager" TYPE="UI_COMPONENT" LAYER="7" ORDER="1">
+      <contract>
+        <purpose>Create and manage Ribbon tab, panel, and command buttons.</purpose>
+        <inputs>
+          <param name="startup" type="plugin startup context" />
+        </inputs>
+        <outputs>
+          <param name="ribbon-state" type="created|updated" />
+        </outputs>
+        <errors>
+          <error code="RIBBON_BUILD_FAILED" />
+        </errors>
+      </contract>
+      <interface>
+        <export-buildRibbon PURPOSE="Build EOM PRO ribbon UI" />
+      </interface>
+      <depends>M-COMMANDS, M-LOG</depends>
+    </M-RIBBON>
+
+    <M-ENTRY NAME="PluginEntry" TYPE="ENTRY_POINT" LAYER="8" ORDER="1">
+      <contract>
+        <purpose>Bootstrap plugin lifecycle and compose startup services.</purpose>
+        <inputs>
+          <param name="lifecycle" type="Initialize|Terminate" />
+        </inputs>
+        <outputs>
+          <param name="state" type="ready|stopped" />
+        </outputs>
+        <errors>
+          <error code="PLUGIN_BOOTSTRAP_FAILED" />
+        </errors>
+      </contract>
+      <interface>
+        <export-initialize PURPOSE="Initialize plugin modules" />
+        <export-terminate PURPOSE="Terminate plugin modules" />
+      </interface>
+      <depends>M-RIBBON, M-COMMANDS, M-LOG</depends>
+    </M-ENTRY>
+  </Modules>
+
+  <DataFlow>
+    <DF-MAP NAME="Block replacement" TRIGGER="EOM_MAP">
+      <step-1>CommandRegistry validates license state with LicenseService.</step-1>
+      <step-2>BlockMappingService loads mapping profile from SettingsRepository.</step-2>
+      <step-3>AttributeService reads source attributes including height values.</step-3>
+      <step-4>AutoCADAdapter replaces block preserving insertion point and rotation.</step-4>
+      <step-5>AttributeService writes transferred attributes to target block.</step-5>
+      <step-6>LogService writes replacement summary.</step-6>
+    </DF-MAP>
+
+    <DF-TRACE NAME="Cable tracing and length" TRIGGER="EOM_TRACE">
+      <step-1>CommandRegistry validates license and receives route and endpoints.</step-1>
+      <step-2>GeometryService normalizes selected route coordinates from UCS to WCS.</step-2>
+      <step-3>AttributeService reads endpoint attribute ВЫСОТА_УСТАНОВКИ.</step-3>
+      <step-4>GeometryService computes L_total = L_2d + ABS(H1-H2) + 5%.</step-4>
+      <step-5>XDataService writes length and cable mark to EOM_DATA on polyline.</step-5>
+      <step-6>LogService writes trace diagnostics and result.</step-6>
+    </DF-TRACE>
+
+    <DF-SPEC NAME="Specification generation" TRIGGER="EOM_SPEC">
+      <step-1>CommandRegistry validates license and triggers specification flow.</step-1>
+      <step-2>SpecificationService scans drawing for EOM_DATA payloads.</step-2>
+      <step-3>SpecificationService aggregates lengths by cable type and groups.</step-3>
+      <step-4>SpecExportService exports dataset to AutoCAD table or CSV.</step-4>
+      <step-5>LogService writes export status.</step-5>
+    </DF-SPEC>
+  </DataFlow>
+
+  <ImplementationOrder>
+    <Phase-1 name="Foundation" status="done">
+      <step-1 module="M-ACAD">Implement AutoCAD adapter and transaction helpers.</step-1>
+      <step-2 module="M-JSON">Implement JSON serialization adapter.</step-2>
+      <step-3 module="M-SYSMGMT">Implement hardware probe adapter.</step-3>
+      <step-4 module="M-LOG">Implement centralized logging service.</step-4>
+    </Phase-1>
+
+    <Phase-2 name="Data and Security" status="done">
+      <step-1 module="M-SETTINGS">Implement settings repository for Settings.json.</step-1>
+      <step-2 module="M-LICENSE">Implement license validation layer.</step-2>
+    </Phase-2>
+
+    <Phase-3 name="Domain Core" status="done">
+      <step-1 module="M-ATTR">Implement attribute read/write with Cyrillic safety.</step-1>
+      <step-2 module="M-GEOM">Implement geometry calculations with UCS to WCS normalization.</step-2>
+      <step-3 module="M-XDATA">Implement EOM_DATA XData read/write service.</step-3>
+    </Phase-3>
+
+    <Phase-4 name="UseCase Services" status="done">
+      <step-1 module="M-MAP">Implement block mapping workflow.</step-1>
+      <step-2 module="M-TRACE">Implement trace and length workflow.</step-2>
+      <step-3 module="M-SPEC">Implement specification aggregation workflow.</step-3>
+      <step-4 module="M-EXPORT">Implement AutoCAD table and CSV export workflow.</step-4>
+    </Phase-4>
+
+    <Phase-5 name="Entry and UI" status="done">
+      <step-1 module="M-COMMANDS">Implement command registration and dispatch.</step-1>
+      <step-2 module="M-RIBBON">Implement ribbon composition.</step-2>
+      <step-3 module="M-ENTRY">Implement plugin entry bootstrap.</step-3>
+    </Phase-5>
+  </ImplementationOrder>
+</DevelopmentPlan>
+

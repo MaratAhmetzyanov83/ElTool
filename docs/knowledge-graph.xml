@@ -1,0 +1,208 @@
+﻿<KnowledgeGraph>
+  <Project NAME="ElTools" VERSION="0.1.0">
+    <keywords>AutoCAD API, C#, .NET 8, ЭОМ, Трассировка кабеля, Однолинейные схемы, BIM, Автоматизация проектирования, XData</keywords>
+    <annotation>ElTools — AutoCAD plugin for EOM workflows: block replacement, cable tracing with elevation-aware length, and specification export.</annotation>
+
+    <M-ENTRY NAME="PluginEntry" TYPE="ENTRY_POINT">
+      <purpose>Plugin lifecycle bootstrap and composition root.</purpose>
+      <path>src/Core/PluginApp.cs</path>
+      <depends>M-RIBBON, M-COMMANDS, M-LOG</depends>
+      <annotations>
+        <fn-initialize PURPOSE="Initialize plugin and startup modules" />
+        <fn-terminate PURPOSE="Terminate plugin and release resources" />
+      </annotations>
+    </M-ENTRY>
+
+    <M-RIBBON NAME="RibbonManager" TYPE="UI_COMPONENT">
+      <purpose>Compose EOM PRO ribbon tab and command buttons.</purpose>
+      <path>src/Core/RibbonBuilder.cs</path>
+      <depends>M-COMMANDS, M-LOG</depends>
+      <annotations>
+        <fn-buildRibbon PURPOSE="Build ribbon UI with command buttons" />
+      </annotations>
+    </M-RIBBON>
+
+    <M-COMMANDS NAME="CommandRegistry" TYPE="ENTRY_POINT">
+      <purpose>Register and dispatch EOM_MAP, EOM_TRACE, EOM_SPEC commands.</purpose>
+      <path>src/Commands/CommandRegistry.cs</path>
+      <depends>M-MAP, M-TRACE, M-SPEC, M-EXPORT, M-LICENSE, M-LOG</depends>
+      <annotations>
+        <fn-registerCommands PURPOSE="Register AutoCAD command methods" />
+        <fn-dispatch PURPOSE="Dispatch command to target service" />
+      </annotations>
+    </M-COMMANDS>
+
+    <M-ACAD NAME="AutoCADAdapter" TYPE="INTEGRATION">
+      <purpose>Safe AutoCAD API access and coordinate conversion operations.</purpose>
+      <path>src/Integrations/AutoCADAdapter.cs</path>
+      <depends>none</depends>
+      <annotations>
+        <fn-getActiveDocument PURPOSE="Get active document safely" />
+        <fn-runTransaction PURPOSE="Run operation in transaction" />
+        <fn-ucsToWcs PURPOSE="Convert input geometry from UCS to WCS" />
+      </annotations>
+    </M-ACAD>
+
+    <M-LOG NAME="LogService" TYPE="UTILITY">
+      <purpose>Unified diagnostics and command logs.</purpose>
+      <path>src/Services/LogService.cs</path>
+      <depends>M-ACAD</depends>
+      <annotations>
+        <fn-write PURPOSE="Write message to AutoCAD editor" />
+      </annotations>
+    </M-LOG>
+
+    <M-JSON NAME="JsonAdapter" TYPE="INTEGRATION">
+      <purpose>JSON serialization/deserialization for settings models.</purpose>
+      <path>src/Integrations/JsonAdapter.cs</path>
+      <depends>none</depends>
+      <annotations>
+        <fn-serialize PURPOSE="Serialize object to json" />
+        <fn-deserialize PURPOSE="Deserialize json to object" />
+      </annotations>
+    </M-JSON>
+
+    <M-SETTINGS NAME="SettingsRepository" TYPE="DATA_LAYER">
+      <purpose>Settings persistence in Settings.json.</purpose>
+      <path>src/Data/SettingsRepository.cs</path>
+      <depends>M-JSON, M-LOG</depends>
+      <annotations>
+        <fn-loadSettings PURPOSE="Load mapping and plugin settings" />
+        <fn-saveSettings PURPOSE="Save mapping and plugin settings" />
+        <type-SettingsModel PURPOSE="Settings schema root model" />
+      </annotations>
+    </M-SETTINGS>
+
+    <M-SYSMGMT NAME="HardwareProbeAdapter" TYPE="INTEGRATION">
+      <purpose>Read hardware identity for licensing.</purpose>
+      <path>src/Integrations/HardwareProbeAdapter.cs</path>
+      <depends>none</depends>
+      <annotations>
+        <fn-getHardwareId PURPOSE="Read machine hardware id" />
+      </annotations>
+    </M-SYSMGMT>
+
+    <M-LICENSE NAME="LicenseService" TYPE="UTILITY">
+      <purpose>License validation gate before command execution.</purpose>
+      <path>src/Services/LicenseService.cs</path>
+      <depends>M-SYSMGMT, M-SETTINGS, M-LOG</depends>
+      <annotations>
+        <fn-validate PURPOSE="Validate command permission by license" />
+        <type-LicenseState PURPOSE="License validation result" />
+      </annotations>
+    </M-LICENSE>
+
+    <M-ATTR NAME="AttributeService" TYPE="CORE_LOGIC">
+      <purpose>Read/write block attributes with Cyrillic-safe handling.</purpose>
+      <path>src/Services/AttributeService.cs</path>
+      <depends>M-ACAD</depends>
+      <annotations>
+        <fn-readAttributes PURPOSE="Read block attributes" />
+        <fn-writeAttributes PURPOSE="Write block attributes" />
+      </annotations>
+    </M-ATTR>
+
+    <M-GEOM NAME="GeometryService" TYPE="CORE_LOGIC">
+      <purpose>Cable geometry calculations with UCS to WCS normalization.</purpose>
+      <path>src/Services/GeometryService.cs</path>
+      <depends>M-ACAD</depends>
+      <annotations>
+        <fn-normalizeUcsToWcs PURPOSE="Normalize route geometry to WCS" />
+        <fn-calculateCableLength PURPOSE="Compute L_total = L_2d + ABS(H1-H2) + 5%" />
+      </annotations>
+    </M-GEOM>
+
+    <M-XDATA NAME="XDataService" TYPE="CORE_LOGIC">
+      <purpose>Read/write EOM_DATA payload in entity XData.</purpose>
+      <path>src/Services/XDataService.cs</path>
+      <depends>M-ACAD</depends>
+      <annotations>
+        <fn-readEomData PURPOSE="Read EOM_DATA payload from entity" />
+        <fn-writeEomData PURPOSE="Write EOM_DATA payload to entity" />
+      </annotations>
+    </M-XDATA>
+
+    <M-MAP NAME="BlockMappingService" TYPE="CORE_LOGIC">
+      <purpose>Block replacement according to mapping rules and attribute transfer.</purpose>
+      <path>src/Services/BlockMappingService.cs</path>
+      <depends>M-SETTINGS, M-ATTR, M-ACAD, M-LOG</depends>
+      <annotations>
+        <fn-executeMapping PURPOSE="Run block mapping for user selection" />
+      </annotations>
+    </M-MAP>
+
+    <M-TRACE NAME="CableTraceService" TYPE="CORE_LOGIC">
+      <purpose>Route tracing and cable length calculation with XData persistence.</purpose>
+      <path>src/Services/CableTraceService.cs</path>
+      <depends>M-GEOM, M-ATTR, M-XDATA, M-LOG</depends>
+      <annotations>
+        <fn-executeTrace PURPOSE="Trace route and persist trace result" />
+        <type-TraceResult PURPOSE="Trace output model" />
+      </annotations>
+    </M-TRACE>
+
+    <M-SPEC NAME="SpecificationService" TYPE="CORE_LOGIC">
+      <purpose>Aggregate cable data from EOM_DATA into specification dataset.</purpose>
+      <path>src/Services/SpecificationService.cs</path>
+      <depends>M-XDATA, M-SETTINGS, M-LOG</depends>
+      <annotations>
+        <fn-buildSpecification PURPOSE="Build grouped specification rows" />
+        <type-SpecificationRow PURPOSE="Aggregated specification row" />
+      </annotations>
+    </M-SPEC>
+
+    <M-EXPORT NAME="SpecExportService" TYPE="INTEGRATION">
+      <purpose>Export specification dataset to AutoCAD table and CSV.</purpose>
+      <path>src/Integrations/SpecExportService.cs</path>
+      <depends>M-SPEC, M-ACAD, M-LOG</depends>
+      <annotations>
+        <fn-toAutoCadTable PURPOSE="Export dataset to AutoCAD table" />
+        <fn-toCsv PURPOSE="Export dataset to CSV file" />
+      </annotations>
+    </M-EXPORT>
+
+    <CrossLink from="M-ENTRY" to="M-RIBBON" relation="boots" />
+    <CrossLink from="M-ENTRY" to="M-COMMANDS" relation="boots" />
+    <CrossLink from="M-ENTRY" to="M-LOG" relation="uses" />
+
+    <CrossLink from="M-RIBBON" to="M-COMMANDS" relation="binds" />
+    <CrossLink from="M-RIBBON" to="M-LOG" relation="uses" />
+
+    <CrossLink from="M-COMMANDS" to="M-MAP" relation="dispatches" />
+    <CrossLink from="M-COMMANDS" to="M-TRACE" relation="dispatches" />
+    <CrossLink from="M-COMMANDS" to="M-SPEC" relation="dispatches" />
+    <CrossLink from="M-COMMANDS" to="M-EXPORT" relation="dispatches" />
+    <CrossLink from="M-COMMANDS" to="M-LICENSE" relation="uses" />
+    <CrossLink from="M-COMMANDS" to="M-LOG" relation="uses" />
+
+    <CrossLink from="M-LOG" to="M-ACAD" relation="uses" />
+    <CrossLink from="M-SETTINGS" to="M-JSON" relation="uses" />
+    <CrossLink from="M-SETTINGS" to="M-LOG" relation="uses" />
+
+    <CrossLink from="M-LICENSE" to="M-SYSMGMT" relation="uses" />
+    <CrossLink from="M-LICENSE" to="M-SETTINGS" relation="uses" />
+    <CrossLink from="M-LICENSE" to="M-LOG" relation="uses" />
+
+    <CrossLink from="M-ATTR" to="M-ACAD" relation="uses" />
+    <CrossLink from="M-GEOM" to="M-ACAD" relation="uses" />
+    <CrossLink from="M-XDATA" to="M-ACAD" relation="uses" />
+
+    <CrossLink from="M-MAP" to="M-SETTINGS" relation="uses" />
+    <CrossLink from="M-MAP" to="M-ATTR" relation="uses" />
+    <CrossLink from="M-MAP" to="M-ACAD" relation="uses" />
+    <CrossLink from="M-MAP" to="M-LOG" relation="uses" />
+
+    <CrossLink from="M-TRACE" to="M-GEOM" relation="uses" />
+    <CrossLink from="M-TRACE" to="M-ATTR" relation="uses" />
+    <CrossLink from="M-TRACE" to="M-XDATA" relation="uses" />
+    <CrossLink from="M-TRACE" to="M-LOG" relation="uses" />
+
+    <CrossLink from="M-SPEC" to="M-XDATA" relation="uses" />
+    <CrossLink from="M-SPEC" to="M-SETTINGS" relation="uses" />
+    <CrossLink from="M-SPEC" to="M-LOG" relation="uses" />
+
+    <CrossLink from="M-EXPORT" to="M-SPEC" relation="uses" />
+    <CrossLink from="M-EXPORT" to="M-ACAD" relation="uses" />
+    <CrossLink from="M-EXPORT" to="M-LOG" relation="uses" />
+  </Project>
+</KnowledgeGraph>
