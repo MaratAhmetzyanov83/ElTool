@@ -38,8 +38,8 @@ public class BlockMappingService
                 return;
             }
 
-            ObjectId sourceBtrId = sourceSample.BlockTableRecord;
-            ObjectId targetBtrId = targetSample.BlockTableRecord;
+            ObjectId sourceBtrId = GetEffectiveBlockDefinitionId(sourceSample);
+            ObjectId targetBtrId = GetEffectiveBlockDefinitionId(targetSample);
             if (sourceBtrId == targetBtrId)
             {
                 _log.Write("Исходный и целевой блок совпадают. Замена не требуется.");
@@ -66,7 +66,7 @@ public class BlockMappingService
                 foreach (ObjectId entId in space)
                 {
                     var br = tr.GetObject(entId, OpenMode.ForRead) as BlockReference;
-                    if (br is not null && br.BlockTableRecord == sourceBtrId)
+                    if (br is not null && GetEffectiveBlockDefinitionId(br) == sourceBtrId)
                     {
                         sourceRefs.Add(br);
                     }
@@ -101,6 +101,18 @@ public class BlockMappingService
         _log.Write($"Замена блоков завершена. Заменено: {replaced}.");
         return replaced;
         // END_BLOCK_EXECUTE_MAPPING
+    }
+
+    private static ObjectId GetEffectiveBlockDefinitionId(BlockReference blockReference)
+    {
+        // START_BLOCK_GET_EFFECTIVE_BLOCK_DEFINITION_ID
+        if (!blockReference.DynamicBlockTableRecord.IsNull)
+        {
+            return blockReference.DynamicBlockTableRecord;
+        }
+
+        return blockReference.BlockTableRecord;
+        // END_BLOCK_GET_EFFECTIVE_BLOCK_DEFINITION_ID
     }
 
     private static double SafeScaleRatio(double target, double source)
