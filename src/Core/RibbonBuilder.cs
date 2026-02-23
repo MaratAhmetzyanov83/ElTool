@@ -42,6 +42,7 @@ public class RibbonBuilder
         var tab = new RibbonTab { Id = TabId, Title = "ЭОМ ПРО" };
         var panelSource = new RibbonPanelSource { Title = "Инструменты" };
         panelSource.Items.Add(CreateButton("Замена блоков", "EOM_MAP ", "Замена блоков по профилю соответствия."));
+        panelSource.Items.Add(CreateButton("Настройка маппинга", "EOM_MAPCFG ", "Открыть окно настройки правил соответствия блоков."));
         panelSource.Items.Add(CreateButton("Трассировка", "EOM_TRACE ", "Трассировка кабеля и расчет длины."));
         panelSource.Items.Add(CreateButton("Спецификация", "EOM_SPEC ", "Формирование спецификации по EOM_DATA."));
 

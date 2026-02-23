@@ -11,12 +11,14 @@
 //   EomMap - Executes block mapping workflow.
 //   EomTrace - Executes cable trace workflow.
 //   EomSpec - Executes specification workflow.
+//   EomMapCfg - Opens mapping configuration window.
 // END_MODULE_MAP
 
 using Autodesk.AutoCAD.Runtime;
 using ElTools.Integrations;
 using ElTools.Models;
 using ElTools.Services;
+using ElTools.UI;
 
 namespace ElTools.Commands;
 
@@ -123,5 +125,23 @@ public class CommandRegistry
         _export.ToCsv(rows);
         _log.Write("EOM_SPEC завершена.");
         // END_BLOCK_COMMAND_EOM_SPEC
+    }
+
+    [CommandMethod("EOM_MAPCFG")]
+    public void EomMapCfg()
+    {
+        // START_BLOCK_COMMAND_EOM_MAPCFG
+        try
+        {
+            var vm = new MappingConfigWindowViewModel();
+            var window = new MappingConfigWindow(vm);
+            Application.ShowModalWindow(window);
+            _log.Write("Окно настройки соответствий закрыто.");
+        }
+        catch (System.Exception ex)
+        {
+            _log.Write($"Ошибка открытия окна настройки соответствий: {ex.Message}");
+        }
+        // END_BLOCK_COMMAND_EOM_MAPCFG
     }
 }
