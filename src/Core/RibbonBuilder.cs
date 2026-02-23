@@ -14,6 +14,7 @@
 using System.Windows.Input;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.Windows;
+using ElTools.Commands;
 using ElTools.Services;
 
 namespace ElTools.Core;
@@ -90,13 +91,38 @@ public class RibbonBuilder
                 return;
             }
 
-            Document? doc = Application.DocumentManager.MdiActiveDocument;
-            if (doc is null)
+            string normalized = command.Trim().ToUpperInvariant();
+            var commands = new CommandRegistry();
+
+            if (normalized == "EOM_MAPCFG")
             {
+                commands.EomMapCfg();
                 return;
             }
 
-            doc.SendStringToExecute(command, true, false, true);
+            if (normalized == "EOM_MAP")
+            {
+                commands.EomMap();
+                return;
+            }
+
+            if (normalized == "EOM_TRACE")
+            {
+                commands.EomTrace();
+                return;
+            }
+
+            if (normalized == "EOM_SPEC")
+            {
+                commands.EomSpec();
+                return;
+            }
+
+            Document? doc = Application.DocumentManager.MdiActiveDocument;
+            if (doc is not null)
+            {
+                doc.SendStringToExecute(command, true, false, true);
+            }
             // END_BLOCK_RIBBON_EXECUTE
         }
     }
