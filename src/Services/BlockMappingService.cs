@@ -46,6 +46,13 @@ public class BlockMappingService
                 return;
             }
 
+            // Scale is calibrated by the selected sample pair so visual size is preserved.
+            Scale3d sourceSampleScale = sourceSample.ScaleFactors;
+            Scale3d targetSampleScale = targetSample.ScaleFactors;
+            double mx = SafeScaleRatio(targetSampleScale.X, sourceSampleScale.X);
+            double my = SafeScaleRatio(targetSampleScale.Y, sourceSampleScale.Y);
+            double mz = SafeScaleRatio(targetSampleScale.Z, sourceSampleScale.Z);
+
             var blockTable = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
             foreach (ObjectId btrId in blockTable)
             {
@@ -73,11 +80,13 @@ public class BlockMappingService
                 space.UpgradeOpen();
                 foreach (BlockReference sourceRef in sourceRefs)
                 {
+                    Scale3d srcScale = sourceRef.ScaleFactors;
                     var newRef = new BlockReference(sourceRef.Position, targetBtrId)
                     {
                         Rotation = sourceRef.Rotation,
-                        ScaleFactors = sourceRef.ScaleFactors,
-                        Layer = sourceRef.Layer
+                        ScaleFactors = new Scale3d(srcScale.X * mx, srcScale.Y * my, srcScale.Z * mz),
+                        Layer = sourceRef.Layer,
+                        Normal = sourceRef.Normal
                     };
 
                     space.AppendEntity(newRef);
@@ -92,5 +101,17 @@ public class BlockMappingService
         _log.Write($"Замена блоков завершена. Заменено: {replaced}.");
         return replaced;
         // END_BLOCK_EXECUTE_MAPPING
+    }
+
+    private static double SafeScaleRatio(double target, double source)
+    {
+        // START_BLOCK_SAFE_SCALE_RATIO
+        if (Math.Abs(source) < 1e-9)
+        {
+            return 1.0;
+        }
+
+        return target / source;
+        // END_BLOCK_SAFE_SCALE_RATIO
     }
 }
