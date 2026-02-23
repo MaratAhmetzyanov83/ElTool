@@ -23,14 +23,14 @@ public class RibbonBuilder
     private const string TabId = "ElTools.Tab";
     private readonly LogService _log = new();
 
-    public void BuildRibbon()
+    public bool BuildRibbon()
     {
         // START_BLOCK_BUILD_RIBBON
         RibbonControl? ribbon = ComponentManager.Ribbon;
         if (ribbon is null)
         {
             _log.Write("Лента недоступна.");
-            return;
+            return false;
         }
 
         RibbonTab? existing = ribbon.Tabs.FirstOrDefault(t => t.Id == TabId);
@@ -49,6 +49,7 @@ public class RibbonBuilder
         tab.Panels.Add(new RibbonPanel { Source = panelSource });
         ribbon.Tabs.Add(tab);
         _log.Write("Лента ElTools создана.");
+        return true;
         // END_BLOCK_BUILD_RIBBON
     }
 

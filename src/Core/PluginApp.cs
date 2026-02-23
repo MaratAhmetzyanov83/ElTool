@@ -20,12 +20,18 @@ namespace ElTools.Core;
 public class PluginApp : IExtensionApplication
 {
     private readonly LogService _log = new();
+    private readonly RibbonBuilder _ribbonBuilder = new();
+    private bool _isRibbonInitialized;
 
     public void Initialize()
     {
         // START_BLOCK_PLUGIN_INITIALIZE
-        var ribbon = new RibbonBuilder();
-        ribbon.BuildRibbon();
+        TryBuildRibbon();
+        if (!_isRibbonInitialized)
+        {
+            Application.Idle += OnApplicationIdle;
+        }
+
         _log.Write("Плагин ElTools инициализирован.");
         // END_BLOCK_PLUGIN_INITIALIZE
     }
@@ -33,7 +39,32 @@ public class PluginApp : IExtensionApplication
     public void Terminate()
     {
         // START_BLOCK_PLUGIN_TERMINATE
+        Application.Idle -= OnApplicationIdle;
         _log.Write("Плагин ElTools завершает работу.");
         // END_BLOCK_PLUGIN_TERMINATE
+    }
+
+    private void OnApplicationIdle(object? sender, EventArgs e)
+    {
+        // START_BLOCK_PLUGIN_IDLE_RIBBON_INIT
+        TryBuildRibbon();
+        // END_BLOCK_PLUGIN_IDLE_RIBBON_INIT
+    }
+
+    private void TryBuildRibbon()
+    {
+        // START_BLOCK_PLUGIN_TRY_BUILD_RIBBON
+        if (_isRibbonInitialized)
+        {
+            return;
+        }
+
+        _isRibbonInitialized = _ribbonBuilder.BuildRibbon();
+        if (_isRibbonInitialized)
+        {
+            Application.Idle -= OnApplicationIdle;
+            _log.Write("Лента ElTools инициализирована.");
+        }
+        // END_BLOCK_PLUGIN_TRY_BUILD_RIBBON
     }
 }
