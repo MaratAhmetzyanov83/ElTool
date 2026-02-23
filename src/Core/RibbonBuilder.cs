@@ -78,7 +78,7 @@ public class RibbonBuilder
         public bool CanExecute(object? parameter)
         {
             // START_BLOCK_RIBBON_CAN_EXECUTE
-            return Application.DocumentManager.MdiActiveDocument is not null;
+            return true;
             // END_BLOCK_RIBBON_CAN_EXECUTE
         }
 
