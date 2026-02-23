@@ -290,7 +290,33 @@ public class CommandRegistry
         // START_BLOCK_COMMAND_EOM_BUILD_OLS
         string templatePath = _settings.LoadSettings().ExcelTemplatePath;
         IReadOnlyList<ExcelOutputRow> rows = _export.FromExcelOutput(templatePath);
-        _log.Write($"EOM_ПОСТРОИТЬ_ОЛС: подготовлено строк для построения: {rows.Count}.");
+        if (rows.Count == 0)
+        {
+            _log.Write("EOM_ПОСТРОИТЬ_ОЛС: нет строк OUTPUT для построения.");
+            return;
+        }
+
+        Document? doc = Application.DocumentManager.MdiActiveDocument;
+        if (doc is null)
+        {
+            return;
+        }
+
+        PromptPointResult pointResult = doc.Editor.GetPoint("\nУкажите точку вставки ОЛС: ");
+        if (pointResult.Status != PromptStatus.OK)
+        {
+            _log.Write("EOM_ПОСТРОИТЬ_ОЛС отменена.");
+            return;
+        }
+
+        PromptResult shieldResult = doc.Editor.GetString("\nЩИТ для построения [Enter = все]: ");
+        string? shield = shieldResult.Status == PromptStatus.OK ? shieldResult.StringResult?.Trim() : null;
+        IReadOnlyList<ExcelOutputRow> sourceRows = string.IsNullOrWhiteSpace(shield)
+            ? rows
+            : rows.Where(x => string.Equals(x.Shield, shield, StringComparison.OrdinalIgnoreCase)).ToList();
+
+        DrawOlsRows(sourceRows, pointResult.Value);
+        _log.Write($"EOM_ПОСТРОИТЬ_ОЛС: построено строк: {sourceRows.Count}.");
         // END_BLOCK_COMMAND_EOM_BUILD_OLS
     }
 
@@ -300,7 +326,27 @@ public class CommandRegistry
         // START_BLOCK_COMMAND_EOM_BUILD_PANEL_LAYOUT
         string templatePath = _settings.LoadSettings().ExcelTemplatePath;
         IReadOnlyList<ExcelOutputRow> rows = _export.FromExcelOutput(templatePath);
+        if (rows.Count == 0)
+        {
+            _log.Write("EOM_КОМПОНОВКА_ЩИТА: нет строк OUTPUT для построения.");
+            return;
+        }
+
+        Document? doc = Application.DocumentManager.MdiActiveDocument;
+        if (doc is null)
+        {
+            return;
+        }
+
+        PromptPointResult pointResult = doc.Editor.GetPoint("\nУкажите точку вставки компоновки щита: ");
+        if (pointResult.Status != PromptStatus.OK)
+        {
+            _log.Write("EOM_КОМПОНОВКА_ЩИТА отменена.");
+            return;
+        }
+
         int modulesPerRow = _settings.LoadSettings().PanelModulesPerRow;
+        DrawPanelLayout(rows, pointResult.Value, modulesPerRow);
         _log.Write($"EOM_КОМПОНОВКА_ЩИТА: строк {rows.Count}, модулей в ряду {modulesPerRow}.");
         // END_BLOCK_COMMAND_EOM_BUILD_PANEL_LAYOUT
     }
@@ -420,5 +466,115 @@ public class CommandRegistry
             ? Math.Round(value, 3)
             : 0;
         // END_BLOCK_GET_INSTALL_TYPE_LENGTH
+    }
+
+    private static void DrawOlsRows(IReadOnlyList<ExcelOutputRow> rows, Point3d basePoint)
+    {
+        // START_BLOCK_DRAW_OLS_ROWS
+        Document? doc = Application.DocumentManager.MdiActiveDocument;
+        if (doc is null || rows.Count == 0)
+        {
+            return;
+        }
+
+        using (doc.LockDocument())
+        using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
+        {
+            BlockTable bt = (BlockTable)tr.GetObject(doc.Database.BlockTableId, OpenMode.ForRead);
+            BlockTableRecord ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
+
+            double y = basePoint.Y;
+            const double step = 6.0;
+
+            var title = new DBText
+            {
+                Position = new Point3d(basePoint.X, y, basePoint.Z),
+                Height = 2.5,
+                TextString = "ОДНОЛИНЕЙНАЯ СХЕМА",
+                Layer = "0"
+            };
+            ms.AppendEntity(title);
+            tr.AddNewlyCreatedDBObject(title, true);
+            y -= step;
+
+            foreach (ExcelOutputRow row in rows)
+            {
+                var text = new DBText
+                {
+                    Position = new Point3d(basePoint.X, y, basePoint.Z),
+                    Height = 2.5,
+                    TextString = $"{row.Group} | {row.Cable} | {row.CircuitBreaker} | {row.RcdDiff}",
+                    Layer = "0"
+                };
+                ms.AppendEntity(text);
+                tr.AddNewlyCreatedDBObject(text, true);
+                y -= step;
+            }
+
+            tr.Commit();
+        }
+        // END_BLOCK_DRAW_OLS_ROWS
+    }
+
+    private static void DrawPanelLayout(IReadOnlyList<ExcelOutputRow> rows, Point3d basePoint, int modulesPerRow)
+    {
+        // START_BLOCK_DRAW_PANEL_LAYOUT
+        Document? doc = Application.DocumentManager.MdiActiveDocument;
+        if (doc is null || rows.Count == 0)
+        {
+            return;
+        }
+
+        int safeModulesPerRow = modulesPerRow <= 0 ? 24 : modulesPerRow;
+        const double moduleWidth = 5.0;
+        const double moduleHeight = 4.0;
+        const double rowGap = 2.0;
+
+        using (doc.LockDocument())
+        using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
+        {
+            BlockTable bt = (BlockTable)tr.GetObject(doc.Database.BlockTableId, OpenMode.ForRead);
+            BlockTableRecord ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
+
+            double currentX = basePoint.X;
+            double currentY = basePoint.Y;
+            int occupiedInRow = 0;
+
+            foreach (ExcelOutputRow row in rows.OrderBy(x => x.Shield).ThenBy(x => x.Group))
+            {
+                int moduleCount = Math.Max(1, row.CircuitBreakerModules + row.RcdModules);
+                if (occupiedInRow + moduleCount > safeModulesPerRow)
+                {
+                    occupiedInRow = 0;
+                    currentX = basePoint.X;
+                    currentY -= moduleHeight + rowGap + 4.0;
+                }
+
+                var frame = new Polyline();
+                frame.AddVertexAt(0, new Point2d(currentX, currentY), 0, 0, 0);
+                frame.AddVertexAt(1, new Point2d(currentX + moduleWidth * moduleCount, currentY), 0, 0, 0);
+                frame.AddVertexAt(2, new Point2d(currentX + moduleWidth * moduleCount, currentY - moduleHeight), 0, 0, 0);
+                frame.AddVertexAt(3, new Point2d(currentX, currentY - moduleHeight), 0, 0, 0);
+                frame.Closed = true;
+                ms.AppendEntity(frame);
+                tr.AddNewlyCreatedDBObject(frame, true);
+
+                var label = new DBText
+                {
+                    Position = new Point3d(currentX, currentY + 1.0, basePoint.Z),
+                    Height = 2.2,
+                    TextString = $"{row.Shield}:{row.Group} [{moduleCount}]",
+                    Layer = "0"
+                };
+                ms.AppendEntity(label);
+                tr.AddNewlyCreatedDBObject(label, true);
+
+                currentX += moduleWidth * moduleCount;
+                occupiedInRow += moduleCount;
+            }
+
+            tr.Commit();
+        }
+        // END_BLOCK_DRAW_PANEL_LAYOUT
     }
 }
