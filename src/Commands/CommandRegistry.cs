@@ -403,6 +403,8 @@ public class CommandRegistry
         var lineGroups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var loadGroups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var shieldsByGroup = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+        var loadIdsByGroup = new Dictionary<string, List<ObjectId>>(StringComparer.OrdinalIgnoreCase);
+        var issues = new List<ValidationIssue>();
         using (doc.LockDocument())
         using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
         {
@@ -421,6 +423,7 @@ public class CommandRegistry
                     if (string.IsNullOrWhiteSpace(lineGroup))
                     {
                         missingGroupLines++;
+                        issues.Add(new ValidationIssue("LINE_NO_GROUP", id, "Линия без ГРУППА", "Error"));
                     }
                     else
                     {
@@ -431,6 +434,7 @@ public class CommandRegistry
                         if (string.Equals(installType, rules.Default, StringComparison.OrdinalIgnoreCase))
                         {
                             defaultInstallTypeLines++;
+                            issues.Add(new ValidationIssue("LINE_DEFAULT_INSTALL_TYPE", id, "Линия с типом прокладки по умолчанию", "Warning"));
                         }
                     }
                 }
@@ -450,6 +454,7 @@ public class CommandRegistry
                     if (string.IsNullOrWhiteSpace(group))
                     {
                         missingGroupLoads++;
+                        issues.Add(new ValidationIssue("LOAD_NO_GROUP", id, "Нагрузка без ГРУППА", "Error"));
                         continue;
                     }
 
@@ -458,11 +463,13 @@ public class CommandRegistry
                     if (groupRegex is not null && !groupRegex.IsMatch(groupValue))
                     {
                         regexMismatchGroups++;
+                        issues.Add(new ValidationIssue("GROUP_REGEX_MISMATCH", id, $"Нестандартный формат ГРУППА: {groupValue}", "Warning"));
                     }
 
                     if (string.IsNullOrWhiteSpace(power) || !double.TryParse(power.Replace(',', '.'), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out _))
                     {
                         invalidPowerLoads++;
+                        issues.Add(new ValidationIssue("LOAD_POWER_INVALID", id, "МОЩНОСТЬ отсутствует или нечисловая", "Error"));
                     }
 
                     if (!shieldsByGroup.TryGetValue(groupValue, out HashSet<string>? shields))
@@ -470,6 +477,12 @@ public class CommandRegistry
                         shields = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                         shieldsByGroup[groupValue] = shields;
                     }
+                    if (!loadIdsByGroup.TryGetValue(groupValue, out List<ObjectId>? groupIds))
+                    {
+                        groupIds = new List<ObjectId>();
+                        loadIdsByGroup[groupValue] = groupIds;
+                    }
+                    groupIds.Add(id);
 
                     if (!string.IsNullOrWhiteSpace(shield))
                     {
@@ -483,6 +496,31 @@ public class CommandRegistry
 
         groupShieldMismatch = shieldsByGroup.Values.Count(x => x.Count > 1);
         groupsWithoutLines = loadGroups.Count(x => !lineGroups.Contains(x));
+        foreach (string group in loadGroups.Where(x => !lineGroups.Contains(x)))
+        {
+            if (!loadIdsByGroup.TryGetValue(group, out List<ObjectId>? ids))
+            {
+                continue;
+            }
+
+            foreach (ObjectId id in ids)
+            {
+                issues.Add(new ValidationIssue("GROUP_WITHOUT_LINES", id, $"Группа {group} есть у нагрузок, но нет линий", "Warning"));
+            }
+        }
+
+        foreach ((string group, HashSet<string> shields) in shieldsByGroup.Where(x => x.Value.Count > 1))
+        {
+            if (!loadIdsByGroup.TryGetValue(group, out List<ObjectId>? ids))
+            {
+                continue;
+            }
+
+            foreach (ObjectId id in ids)
+            {
+                issues.Add(new ValidationIssue("GROUP_SHIELD_MISMATCH", id, $"Группа {group} содержит несколько щитов: {string.Join(", ", shields)}", "Warning"));
+            }
+        }
 
         _log.Write(
             $"EOM_ПРОВЕРКА: линии без {PluginConfig.Strings.Group}={missingGroupLines}; " +
@@ -492,6 +530,27 @@ public class CommandRegistry
             $"линии с типом по умолчанию={defaultInstallTypeLines}; " +
             $"несовпадение {PluginConfig.Strings.Shield} внутри группы={groupShieldMismatch}; " +
             $"regex-ошибки группы={regexMismatchGroups}.");
+
+        if (issues.Count > 0)
+        {
+            for (int i = 0; i < issues.Count; i++)
+            {
+                ValidationIssue issue = issues[i];
+                _log.Write($"[{i + 1}] {issue.Severity} {issue.Code}: {issue.Message}");
+            }
+
+            PromptIntegerOptions pickOptions = new($"\nВыберите номер проблемы для выделения [1..{issues.Count}] или Enter: ")
+            {
+                AllowNone = true,
+                LowerLimit = 1,
+                UpperLimit = issues.Count
+            };
+            PromptIntegerResult pickResult = doc.Editor.GetInteger(pickOptions);
+            if (pickResult.Status == PromptStatus.OK)
+            {
+                SelectIssueEntity(doc.Editor, issues[pickResult.Value - 1]);
+            }
+        }
         // END_BLOCK_COMMAND_EOM_VALIDATE
     }
 
@@ -783,5 +842,18 @@ public class CommandRegistry
         ms.AppendEntity(fallback);
         tr.AddNewlyCreatedDBObject(fallback, true);
         // END_BLOCK_INSERT_TEMPLATE_OR_FALLBACK
+    }
+
+    private static void SelectIssueEntity(Editor editor, ValidationIssue issue)
+    {
+        // START_BLOCK_SELECT_ISSUE_ENTITY
+        if (issue.EntityId.IsNull)
+        {
+            return;
+        }
+
+        editor.SetImpliedSelection(new[] { issue.EntityId });
+        editor.WriteMessage($"\nВыбран объект проблемы: {issue.Code}");
+        // END_BLOCK_SELECT_ISSUE_ENTITY
     }
 }
