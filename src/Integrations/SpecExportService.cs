@@ -38,8 +38,45 @@ public class SpecExportService
     public void ToAutoCadTable(IReadOnlyList<SpecificationRow> rows)
     {
         // START_BLOCK_EXPORT_TO_AUTOCAD_TABLE
-        _ = rows;
-        _log.Write("Экспорт в таблицу AutoCAD будет реализован в следующей итерации.");
+        Document? doc = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
+        if (doc is null)
+        {
+            return;
+        }
+
+        using (doc.LockDocument())
+        using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
+        {
+            BlockTable bt = (BlockTable)tr.GetObject(doc.Database.BlockTableId, OpenMode.ForRead);
+            BlockTableRecord ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
+
+            var table = new Table
+            {
+                TableStyle = doc.Database.Tablestyle,
+                Position = new Point3d(0, 0, 0)
+            };
+            table.SetSize(Math.Max(2, rows.Count + 1), 3);
+            table.SetRowHeight(4);
+            table.SetColumnWidth(28);
+
+            table.Cells[0, 0].TextString = "Тип";
+            table.Cells[0, 1].TextString = "Группа";
+            table.Cells[0, 2].TextString = "Длина";
+
+            for (int i = 0; i < rows.Count; i++)
+            {
+                SpecificationRow row = rows[i];
+                table.Cells[i + 1, 0].TextString = row.CableType;
+                table.Cells[i + 1, 1].TextString = row.Group;
+                table.Cells[i + 1, 2].TextString = row.TotalLength.ToString("0.###");
+            }
+
+            ms.AppendEntity(table);
+            tr.AddNewlyCreatedDBObject(table, true);
+            tr.Commit();
+        }
+
+        _log.Write($"Таблица AutoCAD сформирована. Строк: {rows.Count}.");
         // END_BLOCK_EXPORT_TO_AUTOCAD_TABLE
     }
 
@@ -60,6 +97,74 @@ public class SpecExportService
         _log.Write($"Excel OUTPUT импортирован. Строк: {rows.Count}.");
         return rows;
         // END_BLOCK_IMPORT_FROM_EXCEL_OUTPUT
+    }
+
+    public string ExportExcelOutputReportCsv(IReadOnlyList<ExcelOutputRow> rows, string? path = null)
+    {
+        // START_BLOCK_EXPORT_OUTPUT_REPORT_CSV
+        string output = path ?? $"excel_output_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
+        var lines = new List<string>
+        {
+            "ЩИТ,ГРУППА,АВТОМАТ,УЗО_ДИФ,КАБЕЛЬ,МОДУЛЕЙ_АВТОМАТ,МОДУЛЕЙ_УЗО,ПРИМЕЧАНИЕ"
+        };
+        lines.AddRange(rows.Select(r =>
+            $"{r.Shield},{r.Group},{r.CircuitBreaker},{r.RcdDiff},{r.Cable},{r.CircuitBreakerModules},{r.RcdModules},{r.Note}"));
+        File.WriteAllLines(output, lines);
+        _log.Write($"CSV отчет по Excel OUTPUT сформирован: {output}");
+        return output;
+        // END_BLOCK_EXPORT_OUTPUT_REPORT_CSV
+    }
+
+    public void ToAutoCadTableFromOutput(IReadOnlyList<ExcelOutputRow> rows, Point3d position)
+    {
+        // START_BLOCK_EXPORT_OUTPUT_TO_AUTOCAD_TABLE
+        Document? doc = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
+        if (doc is null)
+        {
+            return;
+        }
+
+        using (doc.LockDocument())
+        using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
+        {
+            BlockTable bt = (BlockTable)tr.GetObject(doc.Database.BlockTableId, OpenMode.ForRead);
+            BlockTableRecord ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
+
+            var table = new Table
+            {
+                TableStyle = doc.Database.Tablestyle,
+                Position = position
+            };
+            table.SetSize(Math.Max(2, rows.Count + 1), 6);
+            table.SetRowHeight(4);
+            table.SetColumnWidth(24);
+
+            table.Cells[0, 0].TextString = "ЩИТ";
+            table.Cells[0, 1].TextString = "ГРУППА";
+            table.Cells[0, 2].TextString = "АВТОМАТ";
+            table.Cells[0, 3].TextString = "УЗО/ДИФ";
+            table.Cells[0, 4].TextString = "КАБЕЛЬ";
+            table.Cells[0, 5].TextString = "МОДУЛИ";
+
+            for (int i = 0; i < rows.Count; i++)
+            {
+                ExcelOutputRow row = rows[i];
+                int moduleCount = Math.Max(1, row.CircuitBreakerModules + row.RcdModules);
+                table.Cells[i + 1, 0].TextString = row.Shield;
+                table.Cells[i + 1, 1].TextString = row.Group;
+                table.Cells[i + 1, 2].TextString = row.CircuitBreaker;
+                table.Cells[i + 1, 3].TextString = row.RcdDiff;
+                table.Cells[i + 1, 4].TextString = row.Cable;
+                table.Cells[i + 1, 5].TextString = moduleCount.ToString();
+            }
+
+            ms.AppendEntity(table);
+            tr.AddNewlyCreatedDBObject(table, true);
+            tr.Commit();
+        }
+
+        _log.Write($"Таблица AutoCAD по Excel OUTPUT сформирована. Строк: {rows.Count}.");
+        // END_BLOCK_EXPORT_OUTPUT_TO_AUTOCAD_TABLE
     }
 
     public IReadOnlyList<ExcelOutputRow> GetCachedOrLoadOutput(string templatePath)

@@ -169,7 +169,13 @@ public class CommandRegistry
         string templatePath = _settings.LoadSettings().ExcelTemplatePath;
         IReadOnlyList<GroupTraceAggregate> aggregates = _trace.RecalculateByGroups();
         _export.ToExcelInput(templatePath, aggregates.Select(ToExcelInputRow).ToList());
-        _ = _export.GetCachedOrLoadOutput(templatePath);
+        IReadOnlyList<ExcelOutputRow> outputRows = _export.GetCachedOrLoadOutput(templatePath);
+        if (outputRows.Count > 0)
+        {
+            _export.ExportExcelOutputReportCsv(outputRows);
+            _export.ToAutoCadTableFromOutput(outputRows, new Point3d(0, -120, 0));
+        }
+
         _log.Write("EOM_SPEC завершена.");
         // END_BLOCK_COMMAND_EOM_SPEC
     }
@@ -285,6 +291,11 @@ public class CommandRegistry
         // START_BLOCK_COMMAND_EOM_IMPORT_EXCEL
         string templatePath = _settings.LoadSettings().ExcelTemplatePath;
         IReadOnlyList<ExcelOutputRow> rows = _export.FromExcelOutput(templatePath);
+        if (rows.Count > 0)
+        {
+            _export.ExportExcelOutputReportCsv(rows);
+        }
+
         _log.Write($"EOM_ИМПОРТ_EXCEL завершена. Импортировано строк: {rows.Count}. Кэш обновлен.");
         // END_BLOCK_COMMAND_EOM_IMPORT_EXCEL
     }
@@ -660,43 +671,95 @@ public class CommandRegistry
             double currentY = basePoint.Y;
             int occupiedInRow = 0;
 
-            foreach (ExcelOutputRow row in rows.OrderBy(x => x.Shield).ThenBy(x => x.Group))
+            foreach (IGrouping<string, ExcelOutputRow> shieldGroup in rows
+                .OrderBy(x => x.Shield)
+                .ThenBy(x => x.Group)
+                .GroupBy(x => x.Shield, StringComparer.OrdinalIgnoreCase))
             {
-                int moduleCount = Math.Max(1, row.CircuitBreakerModules + row.RcdModules);
-                if (occupiedInRow + moduleCount > safeModulesPerRow)
-                {
-                    occupiedInRow = 0;
-                    currentX = basePoint.X;
-                    currentY -= moduleHeight + rowGap + 4.0;
-                }
+                occupiedInRow = 0;
+                currentX = basePoint.X;
+                currentY -= 8.0;
 
-                var frame = new Polyline();
-                frame.AddVertexAt(0, new Point2d(currentX, currentY), 0, 0, 0);
-                frame.AddVertexAt(1, new Point2d(currentX + moduleWidth * moduleCount, currentY), 0, 0, 0);
-                frame.AddVertexAt(2, new Point2d(currentX + moduleWidth * moduleCount, currentY - moduleHeight), 0, 0, 0);
-                frame.AddVertexAt(3, new Point2d(currentX, currentY - moduleHeight), 0, 0, 0);
-                frame.Closed = true;
-                ms.AppendEntity(frame);
-                tr.AddNewlyCreatedDBObject(frame, true);
-
-                var label = new DBText
+                var shieldTitle = new DBText
                 {
-                    Position = new Point3d(currentX, currentY + 1.0, basePoint.Z),
-                    Height = 2.2,
-                    TextString = $"{row.Shield}:{row.Group} [{moduleCount}] {row.CircuitBreaker}/{row.RcdDiff}",
+                    Position = new Point3d(currentX, currentY + 3.5, basePoint.Z),
+                    Height = 2.8,
+                    TextString = $"{PluginConfig.Strings.Shield}: {shieldGroup.Key}",
                     Layer = "0"
                 };
-                ms.AppendEntity(label);
-                tr.AddNewlyCreatedDBObject(label, true);
+                ms.AppendEntity(shieldTitle);
+                tr.AddNewlyCreatedDBObject(shieldTitle, true);
 
-                currentX += moduleWidth * moduleCount;
-                occupiedInRow += moduleCount;
+                var inputDevice = new LayoutDevice("\u0412\u0412\u041e\u0414", 2);
+                PlaceLayoutDevice(ms, tr, inputDevice, basePoint.Z, basePoint.X, ref currentX, ref currentY, ref occupiedInRow, safeModulesPerRow, moduleWidth, moduleHeight, rowGap);
+
+                foreach (ExcelOutputRow row in shieldGroup)
+                {
+                    if (row.RcdModules > 0)
+                    {
+                        var rcdDevice = new LayoutDevice($"{row.Group}: {row.RcdDiff}", Math.Max(1, row.RcdModules));
+                        PlaceLayoutDevice(ms, tr, rcdDevice, basePoint.Z, basePoint.X, ref currentX, ref currentY, ref occupiedInRow, safeModulesPerRow, moduleWidth, moduleHeight, rowGap);
+                    }
+
+                    var breakerDevice = new LayoutDevice($"{row.Group}: {row.CircuitBreaker}", Math.Max(1, row.CircuitBreakerModules));
+                    PlaceLayoutDevice(ms, tr, breakerDevice, basePoint.Z, basePoint.X, ref currentX, ref currentY, ref occupiedInRow, safeModulesPerRow, moduleWidth, moduleHeight, rowGap);
+                }
+
+                currentY -= moduleHeight + rowGap + 8.0;
             }
 
             tr.Commit();
         }
         // END_BLOCK_DRAW_PANEL_LAYOUT
     }
+
+    private static void PlaceLayoutDevice(
+        BlockTableRecord ms,
+        Transaction tr,
+        LayoutDevice device,
+        double z,
+        double rowStartX,
+        ref double currentX,
+        ref double currentY,
+        ref int occupiedInRow,
+        int modulesPerRow,
+        double moduleWidth,
+        double moduleHeight,
+        double rowGap)
+    {
+        // START_BLOCK_PLACE_LAYOUT_DEVICE
+        if (occupiedInRow + device.ModuleCount > modulesPerRow)
+        {
+            occupiedInRow = 0;
+            currentX = rowStartX;
+            currentY -= moduleHeight + rowGap + 4.0;
+        }
+
+        var frame = new Polyline();
+        frame.AddVertexAt(0, new Point2d(currentX, currentY), 0, 0, 0);
+        frame.AddVertexAt(1, new Point2d(currentX + moduleWidth * device.ModuleCount, currentY), 0, 0, 0);
+        frame.AddVertexAt(2, new Point2d(currentX + moduleWidth * device.ModuleCount, currentY - moduleHeight), 0, 0, 0);
+        frame.AddVertexAt(3, new Point2d(currentX, currentY - moduleHeight), 0, 0, 0);
+        frame.Closed = true;
+        ms.AppendEntity(frame);
+        tr.AddNewlyCreatedDBObject(frame, true);
+
+        var label = new DBText
+        {
+            Position = new Point3d(currentX, currentY + 1.0, z),
+            Height = 2.0,
+            TextString = $"{device.Label} [{device.ModuleCount}]",
+            Layer = "0"
+        };
+        ms.AppendEntity(label);
+        tr.AddNewlyCreatedDBObject(label, true);
+
+        currentX += moduleWidth * device.ModuleCount;
+        occupiedInRow += device.ModuleCount;
+        // END_BLOCK_PLACE_LAYOUT_DEVICE
+    }
+
+    private sealed record LayoutDevice(string Label, int ModuleCount);
 
     private static void InsertTemplateOrFallback(Transaction tr, BlockTable bt, BlockTableRecord ms, string blockName, Point3d position, string fallbackLabel)
     {
