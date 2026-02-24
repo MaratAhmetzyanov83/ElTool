@@ -19,6 +19,7 @@ namespace ElTools.Integrations;
 
 public class SpecExportService
 {
+    private static readonly Dictionary<string, CachedExcelOutput> OutputCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly LogService _log = new();
     private readonly IExcelGateway _excelGateway = new CsvExcelGateway();
 
@@ -55,8 +56,54 @@ public class SpecExportService
     {
         // START_BLOCK_IMPORT_FROM_EXCEL_OUTPUT
         IReadOnlyList<ExcelOutputRow> rows = _excelGateway.ReadOutputRows(templatePath);
+        OutputCache[NormalizePath(templatePath)] = new CachedExcelOutput(DateTime.UtcNow, rows.ToList());
         _log.Write($"Excel OUTPUT импортирован. Строк: {rows.Count}.");
         return rows;
         // END_BLOCK_IMPORT_FROM_EXCEL_OUTPUT
     }
+
+    public IReadOnlyList<ExcelOutputRow> GetCachedOrLoadOutput(string templatePath)
+    {
+        // START_BLOCK_GET_CACHED_OR_LOAD_OUTPUT
+        string key = NormalizePath(templatePath);
+        if (OutputCache.TryGetValue(key, out CachedExcelOutput? cached))
+        {
+            _log.Write($"Использован кэш Excel OUTPUT. Строк: {cached.Rows.Count}.");
+            return cached.Rows;
+        }
+
+        return FromExcelOutput(templatePath);
+        // END_BLOCK_GET_CACHED_OR_LOAD_OUTPUT
+    }
+
+    public bool TryGetCachedOutput(string templatePath, out IReadOnlyList<ExcelOutputRow> rows)
+    {
+        // START_BLOCK_TRY_GET_CACHED_OUTPUT
+        string key = NormalizePath(templatePath);
+        if (OutputCache.TryGetValue(key, out CachedExcelOutput? cached))
+        {
+            rows = cached.Rows;
+            return true;
+        }
+
+        rows = Array.Empty<ExcelOutputRow>();
+        return false;
+        // END_BLOCK_TRY_GET_CACHED_OUTPUT
+    }
+
+    public void ClearCachedOutput(string templatePath)
+    {
+        // START_BLOCK_CLEAR_CACHED_OUTPUT
+        _ = OutputCache.Remove(NormalizePath(templatePath));
+        // END_BLOCK_CLEAR_CACHED_OUTPUT
+    }
+
+    private static string NormalizePath(string path)
+    {
+        // START_BLOCK_NORMALIZE_PATH
+        return Path.GetFullPath(path);
+        // END_BLOCK_NORMALIZE_PATH
+    }
+
+    private sealed record CachedExcelOutput(DateTime ImportedAtUtc, IReadOnlyList<ExcelOutputRow> Rows);
 }

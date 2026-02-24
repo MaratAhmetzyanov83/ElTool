@@ -166,6 +166,10 @@ public class CommandRegistry
         IReadOnlyList<SpecificationRow> rows = _spec.BuildSpecification(Array.Empty<ObjectId>());
         _export.ToAutoCadTable(rows);
         _export.ToCsv(rows);
+        string templatePath = _settings.LoadSettings().ExcelTemplatePath;
+        IReadOnlyList<GroupTraceAggregate> aggregates = _trace.RecalculateByGroups();
+        _export.ToExcelInput(templatePath, aggregates.Select(ToExcelInputRow).ToList());
+        _ = _export.GetCachedOrLoadOutput(templatePath);
         _log.Write("EOM_SPEC завершена.");
         // END_BLOCK_COMMAND_EOM_SPEC
     }
@@ -268,6 +272,7 @@ public class CommandRegistry
         // START_BLOCK_COMMAND_EOM_EXPORT_EXCEL
         IReadOnlyList<GroupTraceAggregate> aggregates = _trace.RecalculateByGroups();
         string templatePath = _settings.LoadSettings().ExcelTemplatePath;
+        _export.ClearCachedOutput(templatePath);
         var inputRows = aggregates.Select(ToExcelInputRow).ToList();
         _export.ToExcelInput(templatePath, inputRows);
         _log.Write("EOM_ЭКСПОРТ_EXCEL завершена.");
@@ -280,7 +285,7 @@ public class CommandRegistry
         // START_BLOCK_COMMAND_EOM_IMPORT_EXCEL
         string templatePath = _settings.LoadSettings().ExcelTemplatePath;
         IReadOnlyList<ExcelOutputRow> rows = _export.FromExcelOutput(templatePath);
-        _log.Write($"EOM_ИМПОРТ_EXCEL завершена. Импортировано строк: {rows.Count}.");
+        _log.Write($"EOM_ИМПОРТ_EXCEL завершена. Импортировано строк: {rows.Count}. Кэш обновлен.");
         // END_BLOCK_COMMAND_EOM_IMPORT_EXCEL
     }
 
@@ -289,7 +294,12 @@ public class CommandRegistry
     {
         // START_BLOCK_COMMAND_EOM_BUILD_OLS
         string templatePath = _settings.LoadSettings().ExcelTemplatePath;
-        IReadOnlyList<ExcelOutputRow> rows = _export.FromExcelOutput(templatePath);
+        bool cacheHit = _export.TryGetCachedOutput(templatePath, out IReadOnlyList<ExcelOutputRow> rows);
+        if (!cacheHit)
+        {
+            rows = _export.GetCachedOrLoadOutput(templatePath);
+        }
+
         if (rows.Count == 0)
         {
             _log.Write("EOM_ПОСТРОИТЬ_ОЛС: нет строк OUTPUT для построения.");
@@ -316,7 +326,7 @@ public class CommandRegistry
             : rows.Where(x => string.Equals(x.Shield, shield, StringComparison.OrdinalIgnoreCase)).ToList();
 
         DrawOlsRows(sourceRows, pointResult.Value);
-        _log.Write($"EOM_ПОСТРОИТЬ_ОЛС: построено строк: {sourceRows.Count}.");
+        _log.Write($"EOM_ПОСТРОИТЬ_ОЛС: построено строк: {sourceRows.Count}. Источник={(cacheHit ? "кэш" : "файл")}.");
         // END_BLOCK_COMMAND_EOM_BUILD_OLS
     }
 
@@ -325,7 +335,12 @@ public class CommandRegistry
     {
         // START_BLOCK_COMMAND_EOM_BUILD_PANEL_LAYOUT
         string templatePath = _settings.LoadSettings().ExcelTemplatePath;
-        IReadOnlyList<ExcelOutputRow> rows = _export.FromExcelOutput(templatePath);
+        bool cacheHit = _export.TryGetCachedOutput(templatePath, out IReadOnlyList<ExcelOutputRow> rows);
+        if (!cacheHit)
+        {
+            rows = _export.GetCachedOrLoadOutput(templatePath);
+        }
+
         if (rows.Count == 0)
         {
             _log.Write("EOM_КОМПОНОВКА_ЩИТА: нет строк OUTPUT для построения.");
@@ -347,7 +362,7 @@ public class CommandRegistry
 
         int modulesPerRow = _settings.LoadSettings().PanelModulesPerRow;
         DrawPanelLayout(rows, pointResult.Value, modulesPerRow);
-        _log.Write($"EOM_КОМПОНОВКА_ЩИТА: строк {rows.Count}, модулей в ряду {modulesPerRow}.");
+        _log.Write($"EOM_КОМПОНОВКА_ЩИТА: строк {rows.Count}, модулей в ряду {modulesPerRow}, источник={(cacheHit ? "кэш" : "файл")}.");
         // END_BLOCK_COMMAND_EOM_BUILD_PANEL_LAYOUT
     }
 
