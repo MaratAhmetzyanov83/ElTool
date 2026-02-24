@@ -1,5 +1,5 @@
-// FILE: src/Services/InstallTypeResolver.cs
-// VERSION: 1.0.0
+﻿// FILE: src/Services/InstallTypeResolver.cs
+// VERSION: 1.1.0
 // START_MODULE_CONTRACT
 //   PURPOSE: Resolve install type by linetype/layer rules with deterministic priority and default fallback.
 //   SCOPE: Runtime matching for EOM_TRACE aggregation and validation.
@@ -12,7 +12,7 @@
 // END_MODULE_MAP
 
 using ElTools.Models;
-using System.Linq;
+using ElTools.Shared;
 
 namespace ElTools.Services;
 
@@ -39,7 +39,7 @@ public sealed class InstallTypeResolver : IInstallTypeResolver
             }
         }
 
-        return string.IsNullOrWhiteSpace(rules.Default) ? "Неопределено" : rules.Default;
+        return string.IsNullOrWhiteSpace(rules.Default) ? PluginConfig.Strings.Unknown : rules.Default;
         // END_BLOCK_RESOLVE_INSTALL_TYPE
     }
 }

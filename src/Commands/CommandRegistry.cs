@@ -39,7 +39,7 @@ public class CommandRegistry
     private readonly SettingsRepository _settings = new();
     private readonly XDataService _xdata = new();
     private readonly AutoCADAdapter _acad = new();
-    private readonly AttributeService _attributes = new();
+    private readonly IInstallTypeResolver _installTypeResolver = new InstallTypeResolver();
 
     public CommandRegistry()
     {
@@ -365,6 +365,17 @@ public class CommandRegistry
         int missingGroupLoads = 0;
         int invalidPowerLoads = 0;
         int groupShieldMismatch = 0;
+        int groupsWithoutLines = 0;
+        int defaultInstallTypeLines = 0;
+        int regexMismatchGroups = 0;
+        SettingsModel settings = _settings.LoadSettings();
+        InstallTypeRuleSet rules = _settings.LoadInstallTypeRules();
+        var groupRegex = string.IsNullOrWhiteSpace(settings.GroupRegex)
+            ? null
+            : new System.Text.RegularExpressions.Regex(settings.GroupRegex, System.Text.RegularExpressions.RegexOptions.Compiled);
+
+        var lineGroups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var loadGroups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var shieldsByGroup = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
         using (doc.LockDocument())
         using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
@@ -380,16 +391,27 @@ public class CommandRegistry
 
                 if (entity is Line or Polyline)
                 {
-                    string? lineGroup = _xdata.GetLineGroup(id);
+                    string? lineGroup = ReadLineGroup(entity);
                     if (string.IsNullOrWhiteSpace(lineGroup))
                     {
                         missingGroupLines++;
+                    }
+                    else
+                    {
+                        string groupValue = lineGroup.Trim();
+                        lineGroups.Add(groupValue);
+                        string linetype = _acad.ResolveLinetype(entity);
+                        string installType = _installTypeResolver.Resolve(linetype, entity.Layer, rules);
+                        if (string.Equals(installType, rules.Default, StringComparison.OrdinalIgnoreCase))
+                        {
+                            defaultInstallTypeLines++;
+                        }
                     }
                 }
 
                 if (entity is BlockReference)
                 {
-                    IReadOnlyDictionary<string, string> attrs = _attributes.ReadAttributes(id);
+                    IReadOnlyDictionary<string, string> attrs = ReadBlockAttributes(tr, (BlockReference)entity);
                     if (attrs.Count == 0)
                     {
                         continue;
@@ -405,15 +427,22 @@ public class CommandRegistry
                         continue;
                     }
 
+                    string groupValue = group.Trim();
+                    loadGroups.Add(groupValue);
+                    if (groupRegex is not null && !groupRegex.IsMatch(groupValue))
+                    {
+                        regexMismatchGroups++;
+                    }
+
                     if (string.IsNullOrWhiteSpace(power) || !double.TryParse(power.Replace(',', '.'), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out _))
                     {
                         invalidPowerLoads++;
                     }
 
-                    if (!shieldsByGroup.TryGetValue(group.Trim(), out HashSet<string>? shields))
+                    if (!shieldsByGroup.TryGetValue(groupValue, out HashSet<string>? shields))
                     {
                         shields = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                        shieldsByGroup[group.Trim()] = shields;
+                        shieldsByGroup[groupValue] = shields;
                     }
 
                     if (!string.IsNullOrWhiteSpace(shield))
@@ -427,7 +456,16 @@ public class CommandRegistry
         }
 
         groupShieldMismatch = shieldsByGroup.Values.Count(x => x.Count > 1);
-        _log.Write($"EOM_ПРОВЕРКА: линии без ГРУППА={missingGroupLines}; нагрузки без ГРУППА={missingGroupLoads}; МОЩНОСТЬ нечисловая={invalidPowerLoads}; несовпадение ЩИТ внутри группы={groupShieldMismatch}.");
+        groupsWithoutLines = loadGroups.Count(x => !lineGroups.Contains(x));
+
+        _log.Write(
+            $"EOM_ПРОВЕРКА: линии без {PluginConfig.Strings.Group}={missingGroupLines}; " +
+            $"нагрузки без {PluginConfig.Strings.Group}={missingGroupLoads}; " +
+            $"{PluginConfig.Strings.Power} нечисловая={invalidPowerLoads}; " +
+            $"группы нагрузок без линий={groupsWithoutLines}; " +
+            $"линии с типом по умолчанию={defaultInstallTypeLines}; " +
+            $"несовпадение {PluginConfig.Strings.Shield} внутри группы={groupShieldMismatch}; " +
+            $"regex-ошибки группы={regexMismatchGroups}.");
         // END_BLOCK_COMMAND_EOM_VALIDATE
     }
 
@@ -443,9 +481,9 @@ public class CommandRegistry
         // START_BLOCK_TO_EXCEL_INPUT_ROW
         string group = row.Group;
         double total = row.TotalLengthMeters;
-        double ceiling = GetInstallTypeLength(row, "Потолок");
-        double floor = GetInstallTypeLength(row, "Пол");
-        double riser = GetInstallTypeLength(row, "Стояк");
+        double ceiling = GetInstallTypeLength(row, PluginConfig.Strings.Ceiling);
+        double floor = GetInstallTypeLength(row, PluginConfig.Strings.Floor);
+        double riser = GetInstallTypeLength(row, PluginConfig.Strings.Riser);
 
         return new ExcelInputRow(
             Shield: row.Shield,
@@ -468,6 +506,53 @@ public class CommandRegistry
         // END_BLOCK_GET_INSTALL_TYPE_LENGTH
     }
 
+    private static IReadOnlyDictionary<string, string> ReadBlockAttributes(Transaction tr, BlockReference block)
+    {
+        // START_BLOCK_READ_BLOCK_ATTRIBUTES_INLINE
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (ObjectId attId in block.AttributeCollection)
+        {
+            if (tr.GetObject(attId, OpenMode.ForRead) is AttributeReference att)
+            {
+                result[att.Tag] = att.TextString ?? string.Empty;
+            }
+        }
+
+        return result;
+        // END_BLOCK_READ_BLOCK_ATTRIBUTES_INLINE
+    }
+
+    private static string? ReadLineGroup(Entity entity)
+    {
+        // START_BLOCK_READ_LINE_GROUP_INLINE
+        if (entity.XData is null)
+        {
+            return null;
+        }
+
+        TypedValue[] values = entity.XData.AsArray();
+        for (int i = 0; i < values.Length - 1; i++)
+        {
+            if (values[i].TypeCode != (int)DxfCode.ExtendedDataRegAppName)
+            {
+                continue;
+            }
+
+            string app = values[i].Value?.ToString() ?? string.Empty;
+            if (!string.Equals(app, PluginConfig.Metadata.ElToolAppName, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            string payload = values[i + 1].Value?.ToString() ?? string.Empty;
+            string[] parts = payload.Split('|');
+            return parts.Length > 0 ? parts[0]?.Trim() : null;
+        }
+
+        return null;
+        // END_BLOCK_READ_LINE_GROUP_INLINE
+    }
+
     private static void DrawOlsRows(IReadOnlyList<ExcelOutputRow> rows, Point3d basePoint)
     {
         // START_BLOCK_DRAW_OLS_ROWS
@@ -484,13 +569,16 @@ public class CommandRegistry
             BlockTableRecord ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
 
             double y = basePoint.Y;
-            const double step = 6.0;
+            const double step = 14.0;
+            const double xInput = 0.0;
+            const double xBreaker = 25.0;
+            const double xRcd = 50.0;
 
             var title = new DBText
             {
                 Position = new Point3d(basePoint.X, y, basePoint.Z),
                 Height = 2.5,
-                TextString = "ОДНОЛИНЕЙНАЯ СХЕМА",
+                TextString = "\u041e\u0414\u041d\u041e\u041b\u0418\u041d\u0415\u0419\u041d\u0410\u042f \u0421\u0425\u0415\u041c\u0410",
                 Layer = "0"
             };
             ms.AppendEntity(title);
@@ -499,15 +587,32 @@ public class CommandRegistry
 
             foreach (ExcelOutputRow row in rows)
             {
-                var text = new DBText
+                Point3d inputPoint = new(basePoint.X + xInput, y, basePoint.Z);
+                Point3d breakerPoint = new(basePoint.X + xBreaker, y, basePoint.Z);
+                Point3d rcdPoint = new(basePoint.X + xRcd, y, basePoint.Z);
+
+                InsertTemplateOrFallback(tr, bt, ms, PluginConfig.TemplateBlocks.Input, inputPoint, "\u0412\u0412\u041e\u0414");
+                InsertTemplateOrFallback(tr, bt, ms, PluginConfig.TemplateBlocks.Breaker, breakerPoint, row.CircuitBreaker);
+                InsertTemplateOrFallback(tr, bt, ms, PluginConfig.TemplateBlocks.Rcd, rcdPoint, row.RcdDiff);
+
+                var l1 = new Line(new Point3d(inputPoint.X + 5, inputPoint.Y, inputPoint.Z), new Point3d(breakerPoint.X - 1, breakerPoint.Y, breakerPoint.Z));
+                ms.AppendEntity(l1);
+                tr.AddNewlyCreatedDBObject(l1, true);
+
+                var l2 = new Line(new Point3d(breakerPoint.X + 5, breakerPoint.Y, breakerPoint.Z), new Point3d(rcdPoint.X - 1, rcdPoint.Y, rcdPoint.Z));
+                ms.AppendEntity(l2);
+                tr.AddNewlyCreatedDBObject(l2, true);
+
+                var label = new DBText
                 {
-                    Position = new Point3d(basePoint.X, y, basePoint.Z),
+                    Position = new Point3d(basePoint.X + xRcd + 12, y, basePoint.Z),
                     Height = 2.5,
-                    TextString = $"{row.Group} | {row.Cable} | {row.CircuitBreaker} | {row.RcdDiff}",
+                    TextString = $"{row.Group} | {row.Cable} | {row.CircuitBreaker}",
                     Layer = "0"
                 };
-                ms.AppendEntity(text);
-                tr.AddNewlyCreatedDBObject(text, true);
+                ms.AppendEntity(label);
+                tr.AddNewlyCreatedDBObject(label, true);
+
                 y -= step;
             }
 
@@ -563,7 +668,7 @@ public class CommandRegistry
                 {
                     Position = new Point3d(currentX, currentY + 1.0, basePoint.Z),
                     Height = 2.2,
-                    TextString = $"{row.Shield}:{row.Group} [{moduleCount}]",
+                    TextString = $"{row.Shield}:{row.Group} [{moduleCount}] {row.CircuitBreaker}/{row.RcdDiff}",
                     Layer = "0"
                 };
                 ms.AppendEntity(label);
@@ -576,5 +681,29 @@ public class CommandRegistry
             tr.Commit();
         }
         // END_BLOCK_DRAW_PANEL_LAYOUT
+    }
+
+    private static void InsertTemplateOrFallback(Transaction tr, BlockTable bt, BlockTableRecord ms, string blockName, Point3d position, string fallbackLabel)
+    {
+        // START_BLOCK_INSERT_TEMPLATE_OR_FALLBACK
+        if (bt.Has(blockName))
+        {
+            ObjectId blockId = bt[blockName];
+            var blockRef = new BlockReference(position, blockId);
+            ms.AppendEntity(blockRef);
+            tr.AddNewlyCreatedDBObject(blockRef, true);
+            return;
+        }
+
+        var fallback = new DBText
+        {
+            Position = position,
+            Height = 2.5,
+            TextString = fallbackLabel,
+            Layer = "0"
+        };
+        ms.AppendEntity(fallback);
+        tr.AddNewlyCreatedDBObject(fallback, true);
+        // END_BLOCK_INSERT_TEMPLATE_OR_FALLBACK
     }
 }
