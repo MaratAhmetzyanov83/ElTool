@@ -1,4 +1,4 @@
-﻿// FILE: src/Services/XDataService.cs
+// FILE: src/Services/XDataService.cs
 // VERSION: 1.0.0
 // START_MODULE_CONTRACT
 //   PURPOSE: Read and write structured XData with application key EOM_DATA.
@@ -12,6 +12,11 @@
 //   ReadEomData - Reads EOM_DATA payload from entity XData.
 // END_MODULE_MAP
 
+// START_CHANGE_SUMMARY
+//   LAST_CHANGE: v1.0.0 - Added missing CHANGE_SUMMARY block for GRACE integrity refresh.
+// END_CHANGE_SUMMARY
+
+
 using ElTools.Integrations;
 using ElTools.Models;
 using ElTools.Shared;
@@ -23,6 +28,14 @@ public class XDataService
     private static readonly Dictionary<string, string> ActiveGroupsByDocument = new(StringComparer.OrdinalIgnoreCase);
     private const string LineMetadataSeparator = "|";
     private readonly AutoCADAdapter _acad = new();
+
+    // START_CONTRACT: WriteEomData
+    //   PURPOSE: Write eom data.
+    //   INPUTS: { entityId: ObjectId - method parameter; record: EomDataRecord - method parameter }
+    //   OUTPUTS: { void - no return value }
+    //   SIDE_EFFECTS: May modify CAD entities, configuration files, runtime state, or diagnostics.
+    //   LINKS: M-XDATA
+    // END_CONTRACT: WriteEomData
 
     public void WriteEomData(ObjectId entityId, EomDataRecord record)
     {
@@ -47,6 +60,14 @@ public class XDataService
         });
         // END_BLOCK_WRITE_EOM_DATA
     }
+
+    // START_CONTRACT: ReadEomData
+    //   PURPOSE: Read eom data.
+    //   INPUTS: { entityId: ObjectId - method parameter }
+    //   OUTPUTS: { EomDataRecord? - result of read eom data }
+    //   SIDE_EFFECTS: Reads CAD/runtime/config state and may emit diagnostics.
+    //   LINKS: M-XDATA
+    // END_CONTRACT: ReadEomData
 
     public EomDataRecord? ReadEomData(ObjectId entityId)
     {
@@ -79,6 +100,14 @@ public class XDataService
         // END_BLOCK_READ_EOM_DATA
     }
 
+    // START_CONTRACT: SetActiveGroup
+    //   PURPOSE: Set active group.
+    //   INPUTS: { groupCode: string - method parameter }
+    //   OUTPUTS: { void - no return value }
+    //   SIDE_EFFECTS: May modify CAD entities, configuration files, runtime state, or diagnostics.
+    //   LINKS: M-XDATA
+    // END_CONTRACT: SetActiveGroup
+
     public void SetActiveGroup(string groupCode)
     {
         // START_BLOCK_SET_ACTIVE_GROUP
@@ -91,6 +120,14 @@ public class XDataService
         ActiveGroupsByDocument[GetDocumentKey(doc)] = groupCode.Trim();
         // END_BLOCK_SET_ACTIVE_GROUP
     }
+
+    // START_CONTRACT: GetActiveGroup
+    //   PURPOSE: Retrieve active group.
+    //   INPUTS: none
+    //   OUTPUTS: { string? - result of retrieve active group }
+    //   SIDE_EFFECTS: Reads CAD/runtime/config state and may emit diagnostics.
+    //   LINKS: M-XDATA
+    // END_CONTRACT: GetActiveGroup
 
     public string? GetActiveGroup()
     {
@@ -105,6 +142,14 @@ public class XDataService
         // END_BLOCK_GET_ACTIVE_GROUP
     }
 
+    // START_CONTRACT: ApplyActiveGroupToEntity
+    //   PURPOSE: Apply active group to entity.
+    //   INPUTS: { entityId: ObjectId - method parameter }
+    //   OUTPUTS: { void - no return value }
+    //   SIDE_EFFECTS: May read or update CAD/runtime/config state and diagnostics.
+    //   LINKS: M-XDATA
+    // END_CONTRACT: ApplyActiveGroupToEntity
+
     public void ApplyActiveGroupToEntity(ObjectId entityId)
     {
         // START_BLOCK_APPLY_ACTIVE_GROUP_TO_ENTITY
@@ -117,6 +162,14 @@ public class XDataService
         SetLineGroup(entityId, group);
         // END_BLOCK_APPLY_ACTIVE_GROUP_TO_ENTITY
     }
+
+    // START_CONTRACT: AssignGroupToSelection
+    //   PURPOSE: Assign group to selection.
+    //   INPUTS: { entityIds: IEnumerable<ObjectId> - method parameter; groupCode: string - method parameter }
+    //   OUTPUTS: { void - no return value }
+    //   SIDE_EFFECTS: May modify CAD entities, configuration files, runtime state, or diagnostics.
+    //   LINKS: M-XDATA
+    // END_CONTRACT: AssignGroupToSelection
 
     public void AssignGroupToSelection(IEnumerable<ObjectId> entityIds, string groupCode)
     {
@@ -132,6 +185,14 @@ public class XDataService
         }
         // END_BLOCK_ASSIGN_GROUP_TO_SELECTION
     }
+
+    // START_CONTRACT: SetLineGroup
+    //   PURPOSE: Set line group.
+    //   INPUTS: { entityId: ObjectId - method parameter; groupCode: string - method parameter; installType: string - method parameter }
+    //   OUTPUTS: { void - no return value }
+    //   SIDE_EFFECTS: May modify CAD entities, configuration files, runtime state, or diagnostics.
+    //   LINKS: M-XDATA
+    // END_CONTRACT: SetLineGroup
 
     public void SetLineGroup(ObjectId entityId, string groupCode, string installType = "")
     {
@@ -152,6 +213,14 @@ public class XDataService
         });
         // END_BLOCK_SET_LINE_GROUP
     }
+
+    // START_CONTRACT: GetLineGroup
+    //   PURPOSE: Retrieve line group.
+    //   INPUTS: { entityId: ObjectId - method parameter }
+    //   OUTPUTS: { string? - result of retrieve line group }
+    //   SIDE_EFFECTS: Reads CAD/runtime/config state and may emit diagnostics.
+    //   LINKS: M-XDATA
+    // END_CONTRACT: GetLineGroup
 
     public string? GetLineGroup(ObjectId entityId)
     {
@@ -185,6 +254,14 @@ public class XDataService
         // END_BLOCK_GET_LINE_GROUP
     }
 
+    // START_CONTRACT: IsCableLine
+    //   PURPOSE: Check whether cable line.
+    //   INPUTS: { entity: Entity - method parameter }
+    //   OUTPUTS: { bool - true when method can check whether cable line }
+    //   SIDE_EFFECTS: Reads CAD/runtime/config state and may emit diagnostics.
+    //   LINKS: M-XDATA
+    // END_CONTRACT: IsCableLine
+
     private static bool IsCableLine(Entity entity)
     {
         // START_BLOCK_IS_CABLE_LINE
@@ -192,12 +269,28 @@ public class XDataService
         // END_BLOCK_IS_CABLE_LINE
     }
 
+    // START_CONTRACT: GetDocumentKey
+    //   PURPOSE: Retrieve document key.
+    //   INPUTS: { doc: Document - method parameter }
+    //   OUTPUTS: { string - textual result for retrieve document key }
+    //   SIDE_EFFECTS: Reads CAD/runtime/config state and may emit diagnostics.
+    //   LINKS: M-XDATA
+    // END_CONTRACT: GetDocumentKey
+
     private static string GetDocumentKey(Document doc)
     {
         // START_BLOCK_GET_DOCUMENT_KEY
         return string.IsNullOrWhiteSpace(doc.Name) ? doc.Database.FingerprintGuid.ToString() : doc.Name;
         // END_BLOCK_GET_DOCUMENT_KEY
     }
+
+    // START_CONTRACT: EnsureRegApp
+    //   PURPOSE: Ensure reg app.
+    //   INPUTS: { tr: Transaction - method parameter; db: Database - method parameter; appName: string - method parameter }
+    //   OUTPUTS: { void - no return value }
+    //   SIDE_EFFECTS: May read or update CAD/runtime/config state and diagnostics.
+    //   LINKS: M-XDATA
+    // END_CONTRACT: EnsureRegApp
 
     private static void EnsureRegApp(Transaction tr, Database db, string appName)
     {
@@ -214,6 +307,14 @@ public class XDataService
         tr.AddNewlyCreatedDBObject(reg, true);
         // END_BLOCK_ENSURE_REGAPP
     }
+
+    // START_CONTRACT: UpsertAppXData
+    //   PURPOSE: Upsert app X data.
+    //   INPUTS: { entity: Entity - method parameter; appName: string - method parameter; appPayload: IReadOnlyList<TypedValue> - method parameter }
+    //   OUTPUTS: { void - no return value }
+    //   SIDE_EFFECTS: May read or update CAD/runtime/config state and diagnostics.
+    //   LINKS: M-XDATA
+    // END_CONTRACT: UpsertAppXData
 
     private static void UpsertAppXData(Entity entity, string appName, IReadOnlyList<TypedValue> appPayload)
     {
@@ -248,4 +349,3 @@ public class XDataService
         // END_BLOCK_UPSERT_APP_XDATA
     }
 }
-

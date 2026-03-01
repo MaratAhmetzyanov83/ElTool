@@ -1,4 +1,4 @@
-﻿// FILE: src/Services/BlockMappingService.cs
+// FILE: src/Services/BlockMappingService.cs
 // VERSION: 1.1.0
 // START_MODULE_CONTRACT
 //   PURPOSE: Replace source blocks with a selected target block in drawing.
@@ -24,6 +24,14 @@ public class BlockMappingService
     private readonly AutoCADAdapter _acad = new();
     private readonly LogService _log = new();
 
+    // START_CONTRACT: ExecuteMapping
+    //   PURPOSE: Execute mapping.
+    //   INPUTS: { sourceSampleId: ObjectId - method parameter; targetSampleId: ObjectId - method parameter }
+    //   OUTPUTS: { int - result of execute mapping }
+    //   SIDE_EFFECTS: May modify CAD entities, configuration files, runtime state, or diagnostics.
+    //   LINKS: M-BLOCK-REPLACE
+    // END_CONTRACT: ExecuteMapping
+
     public int ExecuteMapping(ObjectId sourceSampleId, ObjectId targetSampleId)
     {
         // START_BLOCK_EXECUTE_MAPPING
@@ -34,7 +42,7 @@ public class BlockMappingService
             var targetSample = tr.GetObject(targetSampleId, OpenMode.ForRead) as BlockReference;
             if (sourceSample is null || targetSample is null)
             {
-                _log.Write("Выбранный объект не является блоком.");
+                _log.Write("Р вЂ™РЎвЂ№Р В±РЎР‚Р В°Р Р…Р Р…РЎвЂ№Р в„– Р С•Р В±РЎР‰Р ВµР С”РЎвЂљ Р Р…Р Вµ РЎРЏР Р†Р В»РЎРЏР ВµРЎвЂљРЎРѓРЎРЏ Р В±Р В»Р С•Р С”Р С•Р С.");
                 return;
             }
 
@@ -42,7 +50,7 @@ public class BlockMappingService
             ObjectId targetBtrId = GetEffectiveBlockDefinitionId(targetSample);
             if (sourceBtrId == targetBtrId)
             {
-                _log.Write("Исходный и целевой блок совпадают. Замена не требуется.");
+                _log.Write("Р ВРЎРѓРЎвЂ¦Р С•Р Т‘Р Р…РЎвЂ№Р в„– Р С‘ РЎвЂ Р ВµР В»Р ВµР Р†Р С•Р в„– Р В±Р В»Р С•Р С” РЎРѓР С•Р Р†Р С—Р В°Р Т‘Р В°РЎР‹РЎвЂљ. Р вЂ”Р В°Р СР ВµР Р…Р В° Р Р…Р Вµ РЎвЂљРЎР‚Р ВµР В±РЎС“Р ВµРЎвЂљРЎРѓРЎРЏ.");
                 return;
             }
 
@@ -98,10 +106,18 @@ public class BlockMappingService
             }
         });
 
-        _log.Write($"Замена блоков завершена. Заменено: {replaced}.");
+        _log.Write($"Р вЂ”Р В°Р СР ВµР Р…Р В° Р В±Р В»Р С•Р С”Р С•Р Р† Р В·Р В°Р Р†Р ВµРЎР‚РЎв‚¬Р ВµР Р…Р В°. Р вЂ”Р В°Р СР ВµР Р…Р ВµР Р…Р С•: {replaced}.");
         return replaced;
         // END_BLOCK_EXECUTE_MAPPING
     }
+
+    // START_CONTRACT: GetEffectiveBlockDefinitionId
+    //   PURPOSE: Retrieve effective block definition id.
+    //   INPUTS: { blockReference: BlockReference - method parameter }
+    //   OUTPUTS: { ObjectId - result of retrieve effective block definition id }
+    //   SIDE_EFFECTS: Reads CAD/runtime/config state and may emit diagnostics.
+    //   LINKS: M-BLOCK-REPLACE
+    // END_CONTRACT: GetEffectiveBlockDefinitionId
 
     private static ObjectId GetEffectiveBlockDefinitionId(BlockReference blockReference)
     {
@@ -115,6 +131,14 @@ public class BlockMappingService
         // END_BLOCK_GET_EFFECTIVE_BLOCK_DEFINITION_ID
     }
 
+    // START_CONTRACT: SafeScaleRatio
+    //   PURPOSE: Safe scale ratio.
+    //   INPUTS: { target: double - method parameter; source: double - method parameter }
+    //   OUTPUTS: { double - result of safe scale ratio }
+    //   SIDE_EFFECTS: May read or update CAD/runtime/config state and diagnostics.
+    //   LINKS: M-BLOCK-REPLACE
+    // END_CONTRACT: SafeScaleRatio
+
     private static double SafeScaleRatio(double target, double source)
     {
         // START_BLOCK_SAFE_SCALE_RATIO
@@ -127,4 +151,3 @@ public class BlockMappingService
         // END_BLOCK_SAFE_SCALE_RATIO
     }
 }
-

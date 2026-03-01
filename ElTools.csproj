@@ -22,6 +22,7 @@
     <PackageReference Include="AutoCAD.NET" Version="25.1.0"><Private>False</Private></PackageReference>
     <PackageReference Include="AutoCAD.NET.Model" Version="25.1.0"><Private>False</Private></PackageReference>
     <PackageReference Include="AutoCAD.NET.Core" Version="25.1.0"><Private>False</Private></PackageReference>
+    <PackageReference Include="ClosedXML" Version="0.104.2" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="System.Management" Version="8.0.0" />

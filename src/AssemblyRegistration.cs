@@ -1,4 +1,4 @@
-﻿// FILE: src/AssemblyRegistration.cs
+// FILE: src/AssemblyRegistration.cs
 // VERSION: 1.0.0
 // START_MODULE_CONTRACT
 //   PURPOSE: Register extension entry point and command container for AutoCAD loader.
@@ -11,10 +11,14 @@
 //   Assembly attributes - ExtensionApplication and CommandClass registration.
 // END_MODULE_MAP
 
+// START_CHANGE_SUMMARY
+//   LAST_CHANGE: v1.0.0 - Added missing CHANGE_SUMMARY block for GRACE integrity refresh.
+// END_CHANGE_SUMMARY
+
+
 using Autodesk.AutoCAD.Runtime;
 using ElTools.Commands;
 using ElTools.Core;
 
 [assembly: ExtensionApplication(typeof(PluginApp))]
 [assembly: CommandClass(typeof(CommandRegistry))]
-

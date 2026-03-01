@@ -1,6 +1,6 @@
-﻿<DevelopmentPlan VERSION="0.4.0">
+﻿<DevelopmentPlan VERSION="0.5.0">
   <Constraints>
-    <ARCH-1>Keep existing 16-module architecture and orchestrator boundaries unchanged.</ARCH-1>
+    <ARCH-1>Keep existing 31-module architecture and orchestrator boundaries unchanged.</ARCH-1>
     <ARCH-2>Keep DF-MAP-01, DF-TRACE-01, DF-SPEC-01 identifiers and preserve Phase-1..Phase-6.</ARCH-2>
     <ARCH-3>Support AutoCAD 2021+ with C# .NET plugin compatibility constraints.</ARCH-3>
     <ARCH-4>Use Russian attribute and user-field names in DWG and validation outputs.</ARCH-4>
@@ -439,6 +439,216 @@
       </interface>
       <depends>M-PANEL-LAYOUT-CONFIG-VM, M-CAD-CONTEXT</depends>
     </M-PANEL-LAYOUT-CONFIG-UI>
+      <M-GLOBAL-USINGS NAME="GlobalUsings" TYPE="UTILITY" LAYER="0" ORDER="4">
+      <contract>
+        <purpose>Provide shared global using directives for project-wide compilation consistency.</purpose>
+        <inputs>
+          <param name="none" type="none" />
+        </inputs>
+        <outputs>
+          <param name="global usings" type="compile-time namespace imports" />
+        </outputs>
+        <errors>
+          <error code="GLOBAL_USINGS_INVALID" />
+        </errors>
+      </contract>
+      <interface>
+        <export-applyGlobalUsings PURPOSE="Apply common global using directives" />
+      </interface>
+      <depends>none</depends>
+    </M-GLOBAL-USINGS>
+    <M-MODELS NAME="DomainModels" TYPE="DATA_LAYER" LAYER="1" ORDER="6">
+      <contract>
+        <purpose>Define immutable domain models shared across mapping, trace, specification, layout, and licensing flows.</purpose>
+        <inputs>
+          <param name="none" type="none" />
+        </inputs>
+        <outputs>
+          <param name="models" type="record and enum declarations" />
+        </outputs>
+        <errors>
+          <error code="MODEL_SCHEMA_INVALID" />
+        </errors>
+      </contract>
+      <interface>
+        <type-DomainModels PURPOSE="Shared record and enum model set" />
+      </interface>
+      <depends>none</depends>
+    </M-MODELS>
+    <M-JSON-ADAPTER NAME="JsonAdapter" TYPE="INTEGRATION" LAYER="0" ORDER="5">
+      <contract>
+        <purpose>Serialize and deserialize configuration and runtime models via Newtonsoft.Json.</purpose>
+        <inputs>
+          <param name="payload" type="object or string" />
+        </inputs>
+        <outputs>
+          <param name="result" type="json string or typed model" />
+        </outputs>
+        <errors>
+          <error code="JSON_SERIALIZATION_FAILED" />
+          <error code="JSON_DESERIALIZATION_FAILED" />
+        </errors>
+      </contract>
+      <interface>
+        <export-serialize PURPOSE="Serialize model to JSON" />
+        <export-deserialize PURPOSE="Deserialize JSON to model" />
+      </interface>
+      <depends>Newtonsoft.Json</depends>
+    </M-JSON-ADAPTER>
+    <M-EXCEL-GATEWAY NAME="ExcelGateway" TYPE="INTEGRATION" LAYER="1" ORDER="7">
+      <contract>
+        <purpose>Provide INPUT/OUTPUT worksheet gateway abstraction with workbook and CSV fallback support.</purpose>
+        <inputs>
+          <param name="template path" type="string" />
+          <param name="rows" type="input/output row models" />
+        </inputs>
+        <outputs>
+          <param name="status" type="gateway operation result" />
+          <param name="rows" type="parsed output rows" />
+        </outputs>
+        <errors>
+          <error code="EXCEL_GATEWAY_READ_FAILED" />
+          <error code="EXCEL_GATEWAY_WRITE_FAILED" />
+        </errors>
+      </contract>
+      <interface>
+        <export-writeInputRows PURPOSE="Write INPUT rows by contract" />
+        <export-readOutputRows PURPOSE="Read OUTPUT rows by contract" />
+      </interface>
+      <depends>M-CONFIG, M-MODELS</depends>
+    </M-EXCEL-GATEWAY>
+    <M-HARDWARE-PROBE NAME="HardwareProbeAdapter" TYPE="INTEGRATION" LAYER="0" ORDER="6">
+      <contract>
+        <purpose>Read machine hardware fingerprint for runtime licensing checks.</purpose>
+        <inputs>
+          <param name="none" type="none" />
+        </inputs>
+        <outputs>
+          <param name="hardware id" type="string" />
+        </outputs>
+        <errors>
+          <error code="HARDWARE_ID_UNAVAILABLE" />
+        </errors>
+      </contract>
+      <interface>
+        <export-getHardwareId PURPOSE="Read stable hardware fingerprint" />
+      </interface>
+      <depends>System.Management</depends>
+    </M-HARDWARE-PROBE>
+    <M-INSTALL-TYPE-RESOLVER NAME="InstallTypeResolver" TYPE="CORE_LOGIC" LAYER="2" ORDER="4">
+      <contract>
+        <purpose>Resolve install type using deterministic rule priority and default fallback.</purpose>
+        <inputs>
+          <param name="linetype" type="string" />
+          <param name="layer" type="string" />
+          <param name="rules" type="install type rules" />
+        </inputs>
+        <outputs>
+          <param name="install type" type="string" />
+        </outputs>
+        <errors>
+          <error code="INSTALL_TYPE_RESOLVE_FAILED" />
+        </errors>
+      </contract>
+      <interface>
+        <export-resolveInstallType PURPOSE="Resolve install type by rules" />
+      </interface>
+      <depends>M-SETTINGS, M-CONFIG, M-MODELS</depends>
+    </M-INSTALL-TYPE-RESOLVER>
+    <M-LICENSE NAME="LicenseService" TYPE="CORE_LOGIC" LAYER="2" ORDER="5">
+      <contract>
+        <purpose>Validate license state for command execution using hardware fingerprint and settings policy.</purpose>
+        <inputs>
+          <param name="license request" type="runtime context" />
+        </inputs>
+        <outputs>
+          <param name="status" type="license validation result" />
+        </outputs>
+        <errors>
+          <error code="LICENSE_INVALID" />
+          <error code="LICENSE_CHECK_FAILED" />
+        </errors>
+      </contract>
+      <interface>
+        <export-validateLicense PURPOSE="Validate current license state" />
+      </interface>
+      <depends>M-HARDWARE-PROBE, M-SETTINGS, M-LOGGING, M-MODELS</depends>
+    </M-LICENSE>
+    <M-MAP-CONFIG-VM NAME="MappingConfigWindowViewModel" TYPE="UI_COMPONENT" LAYER="5" ORDER="6">
+      <contract>
+        <purpose>Provide mapping profile editor state, validation, and persistence for the configuration UI.</purpose>
+        <inputs>
+          <param name="profile selection" type="UI command/input" />
+        </inputs>
+        <outputs>
+          <param name="editable mapping state" type="view-model collections and status" />
+        </outputs>
+        <errors>
+          <error code="MAP_CONFIG_INVALID" />
+          <error code="MAP_CONFIG_SAVE_FAILED" />
+        </errors>
+      </contract>
+      <interface>
+        <export-loadProfile PURPOSE="Load selected mapping profile" />
+        <export-saveProfile PURPOSE="Validate and persist profile" />
+      </interface>
+      <depends>M-SETTINGS, M-LOGGING, M-MODELS</depends>
+    </M-MAP-CONFIG-VM>
+    <M-MAP-CONFIG-UI NAME="MappingConfigWindow" TYPE="UI_COMPONENT" LAYER="5" ORDER="7">
+      <contract>
+        <purpose>Render mapping configuration window and bind editing actions to mapping view-model commands.</purpose>
+        <inputs>
+          <param name="view-model" type="MappingConfigWindowViewModel" />
+        </inputs>
+        <outputs>
+          <param name="operator edits" type="updated mapping configuration" />
+        </outputs>
+        <errors>
+          <error code="MAP_CONFIG_UI_FAILED" />
+        </errors>
+      </contract>
+      <interface>
+        <export-buildLayout PURPOSE="Build and bind mapping configuration UI" />
+      </interface>
+      <depends>M-MAP-CONFIG-VM</depends>
+    </M-MAP-CONFIG-UI>
+    <M-PLUGIN-LIFECYCLE NAME="PluginApp" TYPE="ENTRY_POINT" LAYER="5" ORDER="8">
+      <contract>
+        <purpose>Initialize and terminate plugin runtime, including ribbon bootstrap and startup diagnostics.</purpose>
+        <inputs>
+          <param name="runtime startup" type="AutoCAD extension lifecycle" />
+        </inputs>
+        <outputs>
+          <param name="status" type="plugin lifecycle status" />
+        </outputs>
+        <errors>
+          <error code="PLUGIN_INITIALIZATION_FAILED" />
+        </errors>
+      </contract>
+      <interface>
+        <export-initialize PURPOSE="Initialize plugin runtime" />
+        <export-terminate PURPOSE="Terminate plugin runtime" />
+      </interface>
+      <depends>M-RIBBON, M-ENTRY-COMMANDS, M-LOGGING</depends>
+    </M-PLUGIN-LIFECYCLE>
+    <M-ASSEMBLY-REGISTRATION NAME="AssemblyRegistration" TYPE="ENTRY_POINT" LAYER="5" ORDER="9">
+      <contract>
+        <purpose>Declare assembly bootstrap attributes for AutoCAD extension and command class registration.</purpose>
+        <inputs>
+          <param name="none" type="none" />
+        </inputs>
+        <outputs>
+          <param name="assembly metadata" type="loader-visible attributes" />
+        </outputs>
+        <errors>
+          <error code="ASSEMBLY_REGISTRATION_INVALID" />
+        </errors>
+      </contract>
+      <interface>
+        <export-registerExtension PURPOSE="Register extension application and command class" />
+      </interface>
+      <depends>M-PLUGIN-LIFECYCLE, M-ENTRY-COMMANDS</depends>
+    </M-ASSEMBLY-REGISTRATION>
   </Modules>
   <UseCaseExtensions>
     <UC-UPDATE-01 NAME="Обновление расчетов и агрегатов">
@@ -618,6 +828,7 @@
     <RISK-9>Неоднозначные пользовательские пути шаблонов Excel могут приводить к созданию INPUT/OUTPUT в неожиданной директории.</RISK-9>
   </Risks>
 </DevelopmentPlan>
+
 
 
 

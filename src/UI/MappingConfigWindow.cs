@@ -1,4 +1,4 @@
-﻿// FILE: src/UI/MappingConfigWindow.cs
+// FILE: src/UI/MappingConfigWindow.cs
 // VERSION: 1.0.0
 // START_MODULE_CONTRACT
 //   PURPOSE: Render Russian mapping configuration UI and bind it to MappingConfigWindowViewModel.
@@ -11,6 +11,11 @@
 //   BuildLayout - Creates window layout and data bindings.
 //   CreateGrid - Creates editable rules table.
 // END_MODULE_MAP
+
+// START_CHANGE_SUMMARY
+//   LAST_CHANGE: v1.0.0 - Added missing CHANGE_SUMMARY block for GRACE integrity refresh.
+// END_CHANGE_SUMMARY
+
 
 using System.Windows;
 using System.Windows.Controls;
@@ -34,6 +39,14 @@ public sealed class MappingConfigWindow : Window
         Content = BuildLayout();
         // END_BLOCK_WINDOW_INIT
     }
+
+    // START_CONTRACT: BuildLayout
+    //   PURPOSE: Build layout.
+    //   INPUTS: none
+    //   OUTPUTS: { UIElement - result of build layout }
+    //   SIDE_EFFECTS: May modify CAD entities, configuration files, runtime state, or diagnostics.
+    //   LINKS: M-MAP-CONFIG-UI
+    // END_CONTRACT: BuildLayout
 
     private UIElement BuildLayout()
     {
@@ -68,7 +81,7 @@ public sealed class MappingConfigWindow : Window
 
         var reloadButton = new Button
         {
-            Content = "РћР±РЅРѕРІРёС‚СЊ",
+            Content = "Р В РЎвЂєР В Р’В±Р В Р вЂ¦Р В РЎвЂўР В Р вЂ Р В РЎвЂР РЋРІР‚С™Р РЋР Р‰",
             Width = 110,
             Height = 30,
             Margin = new Thickness(0, 0, 8, 0)
@@ -79,7 +92,7 @@ public sealed class MappingConfigWindow : Window
 
         var saveButton = new Button
         {
-            Content = "РЎРѕС…СЂР°РЅРёС‚СЊ",
+            Content = "Р В Р Р‹Р В РЎвЂўР РЋРІР‚В¦Р РЋР вЂљР В Р’В°Р В Р вЂ¦Р В РЎвЂР РЋРІР‚С™Р РЋР Р‰",
             Width = 120,
             Height = 30
         };
@@ -115,10 +128,10 @@ public sealed class MappingConfigWindow : Window
             Margin = new Thickness(0, 8, 0, 0)
         };
 
-        var addButton = new Button { Content = "Р”РѕР±Р°РІРёС‚СЊ РїСЂР°РІРёР»Рѕ", Width = 150, Height = 28, Margin = new Thickness(0, 0, 8, 0) };
+        var addButton = new Button { Content = "Р В РІР‚СњР В РЎвЂўР В Р’В±Р В Р’В°Р В Р вЂ Р В РЎвЂР РЋРІР‚С™Р РЋР Р‰ Р В РЎвЂ”Р РЋР вЂљР В Р’В°Р В Р вЂ Р В РЎвЂР В Р’В»Р В РЎвЂў", Width = 150, Height = 28, Margin = new Thickness(0, 0, 8, 0) };
         addButton.SetBinding(Button.CommandProperty, new Binding(nameof(MappingConfigWindowViewModel.AddRuleCommand)));
 
-        var removeButton = new Button { Content = "РЈРґР°Р»РёС‚СЊ РІС‹Р±СЂР°РЅРЅРѕРµ", Width = 150, Height = 28 };
+        var removeButton = new Button { Content = "Р В Р в‚¬Р В РўвЂР В Р’В°Р В Р’В»Р В РЎвЂР РЋРІР‚С™Р РЋР Р‰ Р В Р вЂ Р РЋРІР‚в„–Р В Р’В±Р РЋР вЂљР В Р’В°Р В Р вЂ¦Р В Р вЂ¦Р В РЎвЂўР В Р’Вµ", Width = 150, Height = 28 };
         removeButton.SetBinding(Button.CommandProperty, new Binding(nameof(MappingConfigWindowViewModel.RemoveSelectedRuleCommand)));
 
         actions.Children.Add(addButton);
@@ -142,6 +155,14 @@ public sealed class MappingConfigWindow : Window
         // END_BLOCK_BUILD_LAYOUT
     }
 
+    // START_CONTRACT: CreateGrid
+    //   PURPOSE: Create grid.
+    //   INPUTS: none
+    //   OUTPUTS: { DataGrid - result of create grid }
+    //   SIDE_EFFECTS: May modify CAD entities, configuration files, runtime state, or diagnostics.
+    //   LINKS: M-MAP-CONFIG-UI
+    // END_CONTRACT: CreateGrid
+
     private static DataGrid CreateGrid()
     {
         // START_BLOCK_CREATE_GRID
@@ -164,7 +185,7 @@ public sealed class MappingConfigWindow : Window
 
         var sourceColumn = new DataGridTextColumn
         {
-            Header = "РСЃС…РѕРґРЅС‹Р№ Р±Р»РѕРє",
+            Header = "Р В Р’ВР РЋР С“Р РЋРІР‚В¦Р В РЎвЂўР В РўвЂР В Р вЂ¦Р РЋРІР‚в„–Р В РІвЂћвЂ“ Р В Р’В±Р В Р’В»Р В РЎвЂўР В РЎвЂќ",
             Binding = new Binding(nameof(MappingRuleItem.SourceBlockName))
             {
                 Mode = BindingMode.TwoWay,
@@ -175,7 +196,7 @@ public sealed class MappingConfigWindow : Window
 
         var targetColumn = new DataGridTextColumn
         {
-            Header = "Р¦РµР»РµРІРѕР№ Р±Р»РѕРє",
+            Header = "Р В Р’В¦Р В Р’ВµР В Р’В»Р В Р’ВµР В Р вЂ Р В РЎвЂўР В РІвЂћвЂ“ Р В Р’В±Р В Р’В»Р В РЎвЂўР В РЎвЂќ",
             Binding = new Binding(nameof(MappingRuleItem.TargetBlockName))
             {
                 Mode = BindingMode.TwoWay,
@@ -186,7 +207,7 @@ public sealed class MappingConfigWindow : Window
 
         var sourceTagColumn = new DataGridTextColumn
         {
-            Header = "РўРµРі РІС‹СЃРѕС‚С‹ (РёСЃС‚РѕС‡РЅРёРє)",
+            Header = "Р В РЎС›Р В Р’ВµР В РЎвЂ“ Р В Р вЂ Р РЋРІР‚в„–Р РЋР С“Р В РЎвЂўР РЋРІР‚С™Р РЋРІР‚в„– (Р В РЎвЂР РЋР С“Р РЋРІР‚С™Р В РЎвЂўР РЋРІР‚РЋР В Р вЂ¦Р В РЎвЂР В РЎвЂќ)",
             Binding = new Binding(nameof(MappingRuleItem.HeightSourceTag))
             {
                 Mode = BindingMode.TwoWay,
@@ -197,7 +218,7 @@ public sealed class MappingConfigWindow : Window
 
         var targetTagColumn = new DataGridTextColumn
         {
-            Header = "РўРµРі РІС‹СЃРѕС‚С‹ (С†РµР»СЊ)",
+            Header = "Р В РЎС›Р В Р’ВµР В РЎвЂ“ Р В Р вЂ Р РЋРІР‚в„–Р РЋР С“Р В РЎвЂўР РЋРІР‚С™Р РЋРІР‚в„– (Р РЋРІР‚В Р В Р’ВµР В Р’В»Р РЋР Р‰)",
             Binding = new Binding(nameof(MappingRuleItem.HeightTargetTag))
             {
                 Mode = BindingMode.TwoWay,
@@ -214,4 +235,3 @@ public sealed class MappingConfigWindow : Window
         // END_BLOCK_CREATE_GRID
     }
 }
-

@@ -1,4 +1,4 @@
-﻿// FILE: src/Models/DomainModels.cs
+// FILE: src/Models/DomainModels.cs
 // VERSION: 1.2.0
 // START_MODULE_CONTRACT
 //   PURPOSE: Define shared domain models used by mapping, tracing, licensing, and specification workflows.
@@ -14,9 +14,14 @@
 //   SettingsModel/LicenseState - Plugin settings root and license validation state.
 //   PanelLayoutMapConfig/OlsSelectedDevice - OLS selection parsing and selector/legacy layout mapping models.
 // END_MODULE_MAP
+
+// START_CHANGE_SUMMARY
+//   LAST_CHANGE: v1.0.0 - Added missing CHANGE_SUMMARY block for GRACE integrity refresh.
+// END_CHANGE_SUMMARY
+
 namespace ElTools.Models;
 
-public sealed record MappingRule(string SourceBlockName, string TargetBlockName, string HeightSourceTag = "ВЫСОТА", string HeightTargetTag = "ВЫСОТА");
+public sealed record MappingRule(string SourceBlockName, string TargetBlockName, string HeightSourceTag = "Р вЂ™Р В«Р РЋР С›Р СћР С’", string HeightTargetTag = "Р вЂ™Р В«Р РЋР С›Р СћР С’");
 public sealed record MappingProfile(string Name, IReadOnlyList<MappingRule> Rules);
 public sealed record TraceRequest(ObjectId PolylineId, ObjectId SourceBlockId, ObjectId TargetBlockId, string CableMark);
 public sealed record TraceResult(double Length2D, double HeightDelta, double TotalLength, string CableMark);
@@ -90,10 +95,10 @@ public sealed record PanelLayoutMapRule(
 
 public sealed class PanelLayoutAttributeTags
 {
-    public string Device { get; set; } = "АППАРАТ";
-    public string Modules { get; set; } = "МОДУЛЕЙ";
-    public string Group { get; set; } = "ГРУППА";
-    public string Note { get; set; } = "ПРИМЕЧАНИЕ";
+    public string Device { get; set; } = "Р С’Р СџР СџР С’Р В Р С’Р Сћ";
+    public string Modules { get; set; } = "Р СљР С›Р вЂќР Р€Р вЂєР вЂўР в„ў";
+    public string Group { get; set; } = "Р вЂњР В Р Р€Р СџР СџР С’";
+    public string Note { get; set; } = "Р СџР В Р ВР СљР вЂўР В§Р С’Р СњР ВР вЂў";
 }
 
 public sealed class PanelLayoutMapConfig
@@ -110,14 +115,14 @@ public sealed class SettingsModel
     public string ActiveProfile { get; set; } = "Default";
     public List<MappingProfile> MappingProfiles { get; set; } = new();
     public InstallTypeRuleSet InstallTypeRules { get; set; } = new(
-        "Неопределено",
+        "Р СњР ВµР С•Р С—РЎР‚Р ВµР Т‘Р ВµР В»Р ВµР Р…Р С•",
         new List<InstallTypeRule>
         {
-            new(1, "Linetype", "E_CEIL", "Потолок"),
-            new(2, "Layer", "ЭОМ_ПОЛ", "Пол"),
-            new(3, "Layer", "ЭОМ_СТОЯК", "Стояк")
+            new(1, "Linetype", "E_CEIL", "Р СџР С•РЎвЂљР С•Р В»Р С•Р С”"),
+            new(2, "Layer", "Р В­Р С›Р Сљ_Р СџР С›Р вЂє", "Р СџР С•Р В»"),
+            new(3, "Layer", "Р В­Р С›Р Сљ_Р РЋР СћР С›Р Р‡Р С™", "Р РЋРЎвЂљР С•РЎРЏР С”")
         });
-    public string ExcelTemplatePath { get; set; } = "Расчет_Шаблон.xlsx";
+    public string ExcelTemplatePath { get; set; } = "Р В Р В°РЎРѓРЎвЂЎР ВµРЎвЂљ_Р РЃР В°Р В±Р В»Р С•Р Р….xlsx";
     public int PanelModulesPerRow { get; set; } = 24;
     public string? GroupRegex { get; set; }
 }
@@ -129,4 +134,3 @@ public enum LicenseState
     Invalid,
     Expired
 }
-

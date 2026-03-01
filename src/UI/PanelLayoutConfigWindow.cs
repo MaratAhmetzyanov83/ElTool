@@ -13,6 +13,11 @@
 //   CreateLegacyGrid - Creates editable legacy layout map table.
 // END_MODULE_MAP
 
+// START_CHANGE_SUMMARY
+//   LAST_CHANGE: v1.0.0 - Added missing CHANGE_SUMMARY block for GRACE integrity refresh.
+// END_CHANGE_SUMMARY
+
+
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -38,6 +43,14 @@ public sealed class PanelLayoutConfigWindow : Window
         Content = BuildLayout();
         // END_BLOCK_PANEL_LAYOUT_WINDOW_INIT
     }
+
+    // START_CONTRACT: BuildLayout
+    //   PURPOSE: Build layout.
+    //   INPUTS: none
+    //   OUTPUTS: { UIElement - result of build layout }
+    //   SIDE_EFFECTS: May modify CAD entities, configuration files, runtime state, or diagnostics.
+    //   LINKS: M-PANEL-LAYOUT-CONFIG-UI
+    // END_CONTRACT: BuildLayout
 
     private UIElement BuildLayout()
     {
@@ -65,7 +78,7 @@ public sealed class PanelLayoutConfigWindow : Window
         top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        var modulesLabel = new TextBlock { Text = "Модулей в ряду:", VerticalAlignment = VerticalAlignment.Center };
+        var modulesLabel = new TextBlock { Text = "Р В РЎС™Р В РЎвЂўР В РўвЂР РЋРЎвЂњР В Р’В»Р В Р’ВµР В РІвЂћвЂ“ Р В Р вЂ  Р РЋР вЂљР РЋР РЏР В РўвЂР РЋРЎвЂњ:", VerticalAlignment = VerticalAlignment.Center };
         Grid.SetColumn(modulesLabel, 0);
         top.Children.Add(modulesLabel);
 
@@ -78,28 +91,28 @@ public sealed class PanelLayoutConfigWindow : Window
         Grid.SetColumn(modulesBox, 1);
         top.Children.Add(modulesBox);
 
-        var deviceLabel = new TextBlock { Text = "АППАРАТ:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
+        var deviceLabel = new TextBlock { Text = "Р В РЎвЂ™Р В РЎСџР В РЎСџР В РЎвЂ™Р В Р’В Р В РЎвЂ™Р В РЎС›:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
         Grid.SetColumn(deviceLabel, 3);
         top.Children.Add(deviceLabel);
         var deviceBox = CreateTagTextBox(nameof(PanelLayoutConfigWindowViewModel.DeviceTag));
         Grid.SetColumn(deviceBox, 4);
         top.Children.Add(deviceBox);
 
-        var modulesTagLabel = new TextBlock { Text = "МОДУЛЕЙ:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 6, 0) };
+        var modulesTagLabel = new TextBlock { Text = "Р В РЎС™Р В РЎвЂєР В РІР‚СњР В Р в‚¬Р В РІР‚С”Р В РІР‚СћР В РІвЂћСћ:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 6, 0) };
         Grid.SetColumn(modulesTagLabel, 5);
         top.Children.Add(modulesTagLabel);
         var modulesTagBox = CreateTagTextBox(nameof(PanelLayoutConfigWindowViewModel.ModulesTag));
         Grid.SetColumn(modulesTagBox, 6);
         top.Children.Add(modulesTagBox);
 
-        var groupTagLabel = new TextBlock { Text = "ГРУППА:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 6, 0) };
+        var groupTagLabel = new TextBlock { Text = "Р В РІР‚СљР В Р’В Р В Р в‚¬Р В РЎСџР В РЎСџР В РЎвЂ™:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 6, 0) };
         Grid.SetColumn(groupTagLabel, 7);
         top.Children.Add(groupTagLabel);
         var groupTagBox = CreateTagTextBox(nameof(PanelLayoutConfigWindowViewModel.GroupTag));
         Grid.SetColumn(groupTagBox, 8);
         top.Children.Add(groupTagBox);
 
-        var noteTagLabel = new TextBlock { Text = "ПРИМЕЧАНИЕ:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 6, 0) };
+        var noteTagLabel = new TextBlock { Text = "Р В РЎСџР В Р’В Р В Р’ВР В РЎС™Р В РІР‚СћР В Р’В§Р В РЎвЂ™Р В РЎСљР В Р’ВР В РІР‚Сћ:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 6, 0) };
         Grid.SetColumn(noteTagLabel, 9);
         top.Children.Add(noteTagLabel);
         var noteTagBox = CreateTagTextBox(nameof(PanelLayoutConfigWindowViewModel.NoteTag));
@@ -108,7 +121,7 @@ public sealed class PanelLayoutConfigWindow : Window
 
         var pickPairButton = new Button
         {
-            Content = "Выбрать связь из чертежа",
+            Content = "Р В РІР‚в„ўР РЋРІР‚в„–Р В Р’В±Р РЋР вЂљР В Р’В°Р РЋРІР‚С™Р РЋР Р‰ Р РЋР С“Р В Р вЂ Р РЋР РЏР В Р’В·Р РЋР Р‰ Р В РЎвЂР В Р’В· Р РЋРІР‚РЋР В Р’ВµР РЋР вЂљР РЋРІР‚С™Р В Р’ВµР В Р’В¶Р В Р’В°",
             Height = 28,
             Margin = new Thickness(0, 0, 8, 0),
             Padding = new Thickness(10, 0, 10, 0)
@@ -119,7 +132,7 @@ public sealed class PanelLayoutConfigWindow : Window
 
         var reloadButton = new Button
         {
-            Content = "Обновить",
+            Content = "Р В РЎвЂєР В Р’В±Р В Р вЂ¦Р В РЎвЂўР В Р вЂ Р В РЎвЂР РЋРІР‚С™Р РЋР Р‰",
             Height = 28,
             Margin = new Thickness(0, 0, 8, 0),
             Padding = new Thickness(10, 0, 10, 0)
@@ -130,7 +143,7 @@ public sealed class PanelLayoutConfigWindow : Window
 
         var saveButton = new Button
         {
-            Content = "Сохранить",
+            Content = "Р В Р Р‹Р В РЎвЂўР РЋРІР‚В¦Р РЋР вЂљР В Р’В°Р В Р вЂ¦Р В РЎвЂР РЋРІР‚С™Р РЋР Р‰",
             Height = 28,
             Padding = new Thickness(10, 0, 10, 0)
         };
@@ -162,6 +175,14 @@ public sealed class PanelLayoutConfigWindow : Window
         // END_BLOCK_PANEL_LAYOUT_BUILD_LAYOUT
     }
 
+    // START_CONTRACT: BuildSelectorPanel
+    //   PURPOSE: Build selector panel.
+    //   INPUTS: none
+    //   OUTPUTS: { UIElement - result of build selector panel }
+    //   SIDE_EFFECTS: May modify CAD entities, configuration files, runtime state, or diagnostics.
+    //   LINKS: M-PANEL-LAYOUT-CONFIG-UI
+    // END_CONTRACT: BuildSelectorPanel
+
     private UIElement BuildSelectorPanel()
     {
         // START_BLOCK_PANEL_LAYOUT_BUILD_SELECTOR_PANEL
@@ -190,16 +211,16 @@ public sealed class PanelLayoutConfigWindow : Window
             Margin = new Thickness(0, 8, 0, 0)
         };
 
-        var addButton = new Button { Content = "Добавить", Width = 120, Height = 28, Margin = new Thickness(0, 0, 8, 0) };
+        var addButton = new Button { Content = "Р В РІР‚СњР В РЎвЂўР В Р’В±Р В Р’В°Р В Р вЂ Р В РЎвЂР РЋРІР‚С™Р РЋР Р‰", Width = 120, Height = 28, Margin = new Thickness(0, 0, 8, 0) };
         addButton.SetBinding(Button.CommandProperty, new Binding(nameof(PanelLayoutConfigWindowViewModel.AddSelectorRuleCommand)));
 
-        var removeButton = new Button { Content = "Удалить", Width = 120, Height = 28, Margin = new Thickness(0, 0, 8, 0) };
+        var removeButton = new Button { Content = "Р В Р в‚¬Р В РўвЂР В Р’В°Р В Р’В»Р В РЎвЂР РЋРІР‚С™Р РЋР Р‰", Width = 120, Height = 28, Margin = new Thickness(0, 0, 8, 0) };
         removeButton.SetBinding(Button.CommandProperty, new Binding(nameof(PanelLayoutConfigWindowViewModel.RemoveSelectedSelectorRuleCommand)));
 
-        var pickSourceButton = new Button { Content = "Выбрать SOURCE", Width = 150, Height = 28, Margin = new Thickness(0, 0, 8, 0) };
+        var pickSourceButton = new Button { Content = "Р В РІР‚в„ўР РЋРІР‚в„–Р В Р’В±Р РЋР вЂљР В Р’В°Р РЋРІР‚С™Р РЋР Р‰ SOURCE", Width = 150, Height = 28, Margin = new Thickness(0, 0, 8, 0) };
         pickSourceButton.Click += (_, _) => ExecuteWithHiddenWindow(() => _viewModel.PickSourceForSelectedSelectorRuleCommand.Execute(null));
 
-        var pickLayoutButton = new Button { Content = "Выбрать LAYOUT", Width = 150, Height = 28 };
+        var pickLayoutButton = new Button { Content = "Р В РІР‚в„ўР РЋРІР‚в„–Р В Р’В±Р РЋР вЂљР В Р’В°Р РЋРІР‚С™Р РЋР Р‰ LAYOUT", Width = 150, Height = 28 };
         pickLayoutButton.Click += (_, _) => ExecuteWithHiddenWindow(() => _viewModel.PickLayoutForSelectedSelectorRuleCommand.Execute(null));
 
         actions.Children.Add(addButton);
@@ -212,6 +233,14 @@ public sealed class PanelLayoutConfigWindow : Window
         return panel;
         // END_BLOCK_PANEL_LAYOUT_BUILD_SELECTOR_PANEL
     }
+
+    // START_CONTRACT: BuildLegacyPanel
+    //   PURPOSE: Build legacy panel.
+    //   INPUTS: none
+    //   OUTPUTS: { UIElement - result of build legacy panel }
+    //   SIDE_EFFECTS: May modify CAD entities, configuration files, runtime state, or diagnostics.
+    //   LINKS: M-PANEL-LAYOUT-CONFIG-UI
+    // END_CONTRACT: BuildLegacyPanel
 
     private UIElement BuildLegacyPanel()
     {
@@ -241,13 +270,13 @@ public sealed class PanelLayoutConfigWindow : Window
             Margin = new Thickness(0, 8, 0, 0)
         };
 
-        var addButton = new Button { Content = "Добавить", Width = 120, Height = 28, Margin = new Thickness(0, 0, 8, 0) };
+        var addButton = new Button { Content = "Р В РІР‚СњР В РЎвЂўР В Р’В±Р В Р’В°Р В Р вЂ Р В РЎвЂР РЋРІР‚С™Р РЋР Р‰", Width = 120, Height = 28, Margin = new Thickness(0, 0, 8, 0) };
         addButton.SetBinding(Button.CommandProperty, new Binding(nameof(PanelLayoutConfigWindowViewModel.AddLegacyRuleCommand)));
 
-        var removeButton = new Button { Content = "Удалить", Width = 120, Height = 28, Margin = new Thickness(0, 0, 8, 0) };
+        var removeButton = new Button { Content = "Р В Р в‚¬Р В РўвЂР В Р’В°Р В Р’В»Р В РЎвЂР РЋРІР‚С™Р РЋР Р‰", Width = 120, Height = 28, Margin = new Thickness(0, 0, 8, 0) };
         removeButton.SetBinding(Button.CommandProperty, new Binding(nameof(PanelLayoutConfigWindowViewModel.RemoveSelectedLegacyRuleCommand)));
 
-        var pickLayoutButton = new Button { Content = "Выбрать LAYOUT", Width = 150, Height = 28 };
+        var pickLayoutButton = new Button { Content = "Р В РІР‚в„ўР РЋРІР‚в„–Р В Р’В±Р РЋР вЂљР В Р’В°Р РЋРІР‚С™Р РЋР Р‰ LAYOUT", Width = 150, Height = 28 };
         pickLayoutButton.Click += (_, _) => ExecuteWithHiddenWindow(() => _viewModel.PickLayoutForSelectedLegacyRuleCommand.Execute(null));
 
         actions.Children.Add(addButton);
@@ -259,6 +288,14 @@ public sealed class PanelLayoutConfigWindow : Window
         return panel;
         // END_BLOCK_PANEL_LAYOUT_BUILD_LEGACY_PANEL
     }
+
+    // START_CONTRACT: CreateSelectorGrid
+    //   PURPOSE: Create selector grid.
+    //   INPUTS: none
+    //   OUTPUTS: { DataGrid - result of create selector grid }
+    //   SIDE_EFFECTS: May modify CAD entities, configuration files, runtime state, or diagnostics.
+    //   LINKS: M-PANEL-LAYOUT-CONFIG-UI
+    // END_CONTRACT: CreateSelectorGrid
 
     private static DataGrid CreateSelectorGrid()
     {
@@ -339,6 +376,14 @@ public sealed class PanelLayoutConfigWindow : Window
         // END_BLOCK_PANEL_LAYOUT_CREATE_SELECTOR_GRID
     }
 
+    // START_CONTRACT: CreateLegacyGrid
+    //   PURPOSE: Create legacy grid.
+    //   INPUTS: none
+    //   OUTPUTS: { DataGrid - result of create legacy grid }
+    //   SIDE_EFFECTS: May modify CAD entities, configuration files, runtime state, or diagnostics.
+    //   LINKS: M-PANEL-LAYOUT-CONFIG-UI
+    // END_CONTRACT: CreateLegacyGrid
+
     private static DataGrid CreateLegacyGrid()
     {
         // START_BLOCK_PANEL_LAYOUT_CREATE_LEGACY_GRID
@@ -396,6 +441,14 @@ public sealed class PanelLayoutConfigWindow : Window
         // END_BLOCK_PANEL_LAYOUT_CREATE_LEGACY_GRID
     }
 
+    // START_CONTRACT: CreateTagTextBox
+    //   PURPOSE: Create tag text box.
+    //   INPUTS: { propertyName: string - method parameter }
+    //   OUTPUTS: { TextBox - result of create tag text box }
+    //   SIDE_EFFECTS: May modify CAD entities, configuration files, runtime state, or diagnostics.
+    //   LINKS: M-PANEL-LAYOUT-CONFIG-UI
+    // END_CONTRACT: CreateTagTextBox
+
     private static TextBox CreateTagTextBox(string propertyName)
     {
         // START_BLOCK_PANEL_LAYOUT_CREATE_TAG_TEXTBOX
@@ -408,6 +461,14 @@ public sealed class PanelLayoutConfigWindow : Window
         return textBox;
         // END_BLOCK_PANEL_LAYOUT_CREATE_TAG_TEXTBOX
     }
+
+    // START_CONTRACT: ExecuteWithHiddenWindow
+    //   PURPOSE: Execute with hidden window.
+    //   INPUTS: { action: Action - method parameter }
+    //   OUTPUTS: { void - no return value }
+    //   SIDE_EFFECTS: May modify CAD entities, configuration files, runtime state, or diagnostics.
+    //   LINKS: M-PANEL-LAYOUT-CONFIG-UI
+    // END_CONTRACT: ExecuteWithHiddenWindow
 
     private void ExecuteWithHiddenWindow(Action action)
     {

@@ -1,0 +1,8 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<ApplicationPackage SchemaVersion="1.0" AutodeskProduct="AutoCAD" Name="ElTools" AppVersion="1.5.4" ProductType="Application" Description="ElTools plugin" Author="marat">
+  <CompanyDetails Name="marat" Url="" Email="" />
+  <Components>
+    <RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="R25.0" SeriesMax="R25.9" />
+    <ComponentEntry AppName="ElTools" Version="1.5.4" ModuleName="./Contents/Win64/ElTools.dll" AppDescription="ElTools AutoCAD plugin" LoadOnAutoCADStartup="True" UserUnloadable="True" Managed="True" />
+  </Components>
+</ApplicationPackage>

@@ -1,4 +1,4 @@
-﻿// FILE: src/Shared/PluginConfig.cs
+// FILE: src/Shared/PluginConfig.cs
 // VERSION: 1.4.0
 // START_MODULE_CONTRACT
 //   PURPOSE: Keep canonical constants for attributes, commands, metadata keys, and template contracts.
@@ -15,6 +15,11 @@
 //   TemplateBlocks - Optional block names for OLS drawing.
 //   PanelLayout - Panel layout mapping config and OLS attribute tag defaults.
 // END_MODULE_MAP
+
+// START_CHANGE_SUMMARY
+//   LAST_CHANGE: v1.0.0 - Added missing CHANGE_SUMMARY block for GRACE integrity refresh.
+// END_CHANGE_SUMMARY
+
 
 namespace ElTools.Shared;
 
@@ -53,6 +58,7 @@ public static class PluginConfig
         public const string Trace = "EOM_TRACE";
         public const string Spec = "EOM_SPEC";
         public const string MapConfig = "EOM_MAPCFG";
+        public const string ExcelPath = "EOM_EXCEL_PATH";
         public const string Update = "EOM_\u041e\u0411\u041d\u041e\u0412\u0418\u0422\u042c";
         public const string ExportExcel = "EOM_\u042d\u041a\u0421\u041f\u041e\u0420\u0422_EXCEL";
         public const string ImportExcel = "EOM_\u0418\u041c\u041f\u041e\u0420\u0422_EXCEL";

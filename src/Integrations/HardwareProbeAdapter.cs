@@ -1,4 +1,4 @@
-﻿// FILE: src/Integrations/HardwareProbeAdapter.cs
+// FILE: src/Integrations/HardwareProbeAdapter.cs
 // VERSION: 1.0.0
 // START_MODULE_CONTRACT
 //   PURPOSE: Read hardware identifiers via System.Management for licensing.
@@ -11,12 +11,25 @@
 //   GetHardwareId - Retrieves machine hardware fingerprint.
 // END_MODULE_MAP
 
+// START_CHANGE_SUMMARY
+//   LAST_CHANGE: v1.0.0 - Added missing CHANGE_SUMMARY block for GRACE integrity refresh.
+// END_CHANGE_SUMMARY
+
+
 using System.Management;
 
 namespace ElTools.Integrations;
 
 public class HardwareProbeAdapter
 {
+    // START_CONTRACT: GetHardwareId
+    //   PURPOSE: Retrieve hardware id.
+    //   INPUTS: none
+    //   OUTPUTS: { string - textual result for retrieve hardware id }
+    //   SIDE_EFFECTS: Reads CAD/runtime/config state and may emit diagnostics.
+    //   LINKS: M-HARDWARE-PROBE
+    // END_CONTRACT: GetHardwareId
+
     public string GetHardwareId()
     {
         // START_BLOCK_GET_HARDWARE_ID
@@ -40,4 +53,3 @@ public class HardwareProbeAdapter
         // END_BLOCK_GET_HARDWARE_ID
     }
 }
-

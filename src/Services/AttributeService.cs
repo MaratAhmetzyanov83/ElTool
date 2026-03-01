@@ -1,4 +1,4 @@
-﻿// FILE: src/Services/AttributeService.cs
+// FILE: src/Services/AttributeService.cs
 // VERSION: 1.0.0
 // START_MODULE_CONTRACT
 //   PURPOSE: Read and write block attributes with robust Cyrillic support.
@@ -11,6 +11,11 @@
 //   ReadAttributes - Returns attribute dictionary from block.
 //   WriteAttributes - Writes attribute dictionary to block.
 // END_MODULE_MAP
+
+// START_CHANGE_SUMMARY
+//   LAST_CHANGE: v1.0.0 - Added missing CHANGE_SUMMARY block for GRACE integrity refresh.
+// END_CHANGE_SUMMARY
+
 
 using ElTools.Integrations;
 
@@ -46,6 +51,14 @@ public class AttributeService
         // END_BLOCK_READ_ATTRIBUTES
     }
 
+    // START_CONTRACT: WriteAttributes
+    //   PURPOSE: Write attributes.
+    //   INPUTS: { blockId: ObjectId - method parameter; attributes: IReadOnlyDictionary<string, string> - method parameter }
+    //   OUTPUTS: { void - no return value }
+    //   SIDE_EFFECTS: May modify CAD entities, configuration files, runtime state, or diagnostics.
+    //   LINKS: M-ATTRIBUTES
+    // END_CONTRACT: WriteAttributes
+
     public void WriteAttributes(ObjectId blockId, IReadOnlyDictionary<string, string> attributes)
     {
         // START_BLOCK_WRITE_ATTRIBUTES
@@ -73,4 +86,3 @@ public class AttributeService
         // END_BLOCK_WRITE_ATTRIBUTES
     }
 }
-

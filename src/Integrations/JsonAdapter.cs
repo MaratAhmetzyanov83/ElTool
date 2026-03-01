@@ -1,4 +1,4 @@
-﻿// FILE: src/Integrations/JsonAdapter.cs
+// FILE: src/Integrations/JsonAdapter.cs
 // VERSION: 1.0.0
 // START_MODULE_CONTRACT
 //   PURPOSE: Serialize and deserialize plugin settings using Newtonsoft.Json.
@@ -11,6 +11,11 @@
 //   Serialize - Converts model to JSON string.
 //   Deserialize - Converts JSON string to model.
 // END_MODULE_MAP
+
+// START_CHANGE_SUMMARY
+//   LAST_CHANGE: v1.0.0 - Added missing CHANGE_SUMMARY block for GRACE integrity refresh.
+// END_CHANGE_SUMMARY
+
 
 using Newtonsoft.Json;
 
@@ -37,4 +42,3 @@ public class JsonAdapter
         // END_BLOCK_DESERIALIZE
     }
 }
-

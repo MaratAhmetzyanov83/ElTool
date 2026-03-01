@@ -1,4 +1,4 @@
-﻿// FILE: src/Services/LicenseService.cs
+// FILE: src/Services/LicenseService.cs
 // VERSION: 1.0.0
 // START_MODULE_CONTRACT
 //   PURPOSE: Validate license state before command execution.
@@ -10,6 +10,11 @@
 // START_MODULE_MAP
 //   Validate - Returns current license state.
 // END_MODULE_MAP
+
+// START_CHANGE_SUMMARY
+//   LAST_CHANGE: v1.0.0 - Added missing CHANGE_SUMMARY block for GRACE integrity refresh.
+// END_CHANGE_SUMMARY
+
 
 using ElTools.Data;
 using ElTools.Integrations;
@@ -23,6 +28,14 @@ public class LicenseService
     private readonly SettingsRepository _settingsRepository = new();
     private readonly LogService _log = new();
 
+    // START_CONTRACT: Validate
+    //   PURPOSE: Validate.
+    //   INPUTS: none
+    //   OUTPUTS: { LicenseState - result of validate }
+    //   SIDE_EFFECTS: Reads CAD/runtime/config state and may emit diagnostics.
+    //   LINKS: M-LICENSE
+    // END_CONTRACT: Validate
+
     public LicenseState Validate()
     {
         // START_BLOCK_VALIDATE_LICENSE
@@ -31,13 +44,12 @@ public class LicenseService
 
         if (hwid == "UNKNOWN-HWID")
         {
-            _log.Write("Лицензирование отключено: HWID недоступен.");
+            _log.Write("Р вЂєР С‘РЎвЂ Р ВµР Р…Р В·Р С‘РЎР‚Р С•Р Р†Р В°Р Р…Р С‘Р Вµ Р С•РЎвЂљР С”Р В»РЎР‹РЎвЂЎР ВµР Р…Р С•: HWID Р Р…Р ВµР Т‘Р С•РЎРѓРЎвЂљРЎС“Р С—Р ВµР Р….");
             return LicenseState.Disabled;
         }
 
-        _log.Write("Проверка лицензии выполнена.");
+        _log.Write("Р СџРЎР‚Р С•Р Р†Р ВµРЎР‚Р С”Р В° Р В»Р С‘РЎвЂ Р ВµР Р…Р В·Р С‘Р С‘ Р Р†РЎвЂ№Р С—Р С•Р В»Р Р…Р ВµР Р…Р В°.");
         return LicenseState.Valid;
         // END_BLOCK_VALIDATE_LICENSE
     }
 }
-

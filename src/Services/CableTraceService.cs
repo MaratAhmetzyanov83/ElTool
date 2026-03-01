@@ -1,4 +1,4 @@
-﻿// FILE: src/Services/CableTraceService.cs
+// FILE: src/Services/CableTraceService.cs
 // VERSION: 1.0.0
 // START_MODULE_CONTRACT
 //   PURPOSE: Trace selected route and compute cable length including vertical delta and reserve.
@@ -10,6 +10,11 @@
 // START_MODULE_MAP
 //   ExecuteTrace - Performs trace workflow and persists EOM_DATA payload.
 // END_MODULE_MAP
+
+// START_CHANGE_SUMMARY
+//   LAST_CHANGE: v1.0.0 - Added missing CHANGE_SUMMARY block for GRACE integrity refresh.
+// END_CHANGE_SUMMARY
+
 
 using ElTools.Models;
 using ElTools.Data;
@@ -27,7 +32,15 @@ public class CableTraceService
     private readonly SettingsRepository _settings = new();
     private readonly IInstallTypeResolver _installTypeResolver = new InstallTypeResolver();
     private readonly LogService _log = new();
-    private const string HeightTag = "ВЫСОТА_УСТАНОВКИ";
+    private const string HeightTag = "Р В Р’В Р Р†Р вЂљРІвЂћСћР В Р’В Р вЂ™Р’В«Р В Р’В Р В Р вЂ№Р В Р’В Р РЋРІР‚С”Р В Р’В Р РЋРЎвЂєР В Р’В Р РЋРІР‚в„ў_Р В Р’В Р В РІвЂљВ¬Р В Р’В Р В Р вЂ№Р В Р’В Р РЋРЎвЂєР В Р’В Р РЋРІР‚в„ўР В Р’В Р РЋРЎС™Р В Р’В Р РЋРІР‚С”Р В Р’В Р Р†Р вЂљРІвЂћСћР В Р’В Р РЋРІвЂћСћР В Р’В Р вЂ™Р’В";
+
+    // START_CONTRACT: ExecuteTrace
+    //   PURPOSE: Execute trace.
+    //   INPUTS: { request: TraceRequest - method parameter }
+    //   OUTPUTS: { TraceResult? - result of execute trace }
+    //   SIDE_EFFECTS: May modify CAD entities, configuration files, runtime state, or diagnostics.
+    //   LINKS: M-CABLE-CALC
+    // END_CONTRACT: ExecuteTrace
 
     public TraceResult? ExecuteTrace(TraceRequest request)
     {
@@ -35,6 +48,14 @@ public class CableTraceService
         return ExecuteTraceFromBase(request.PolylineId, request.TargetBlockId);
         // END_BLOCK_EXECUTE_TRACE
     }
+
+    // START_CONTRACT: ExecuteTraceFromBase
+    //   PURPOSE: Execute trace from base.
+    //   INPUTS: { basePolylineId: ObjectId - method parameter; targetBlockId: ObjectId - method parameter }
+    //   OUTPUTS: { TraceResult? - result of execute trace from base }
+    //   SIDE_EFFECTS: May modify CAD entities, configuration files, runtime state, or diagnostics.
+    //   LINKS: M-CABLE-CALC
+    // END_CONTRACT: ExecuteTraceFromBase
 
     public TraceResult? ExecuteTraceFromBase(ObjectId basePolylineId, ObjectId targetBlockId)
     {
@@ -80,10 +101,18 @@ public class CableTraceService
             tr.Commit();
         }
 
-        _log.Write($"Трассировка завершена. Длина: {result?.TotalLength:0.###} м.");
+        _log.Write($"Р В Р’В Р РЋРЎвЂєР В Р Р‹Р В РІР‚С™Р В Р’В Р вЂ™Р’В°Р В Р Р‹Р В РЎвЂњР В Р Р‹Р В РЎвЂњР В Р’В Р РЋРІР‚ВР В Р Р‹Р В РІР‚С™Р В Р’В Р РЋРІР‚СћР В Р’В Р В РІР‚В Р В Р’В Р РЋРІР‚СњР В Р’В Р вЂ™Р’В° Р В Р’В Р вЂ™Р’В·Р В Р’В Р вЂ™Р’В°Р В Р’В Р В РІР‚В Р В Р’В Р вЂ™Р’ВµР В Р Р‹Р В РІР‚С™Р В Р Р‹Р Р†РІР‚С™Р’В¬Р В Р’В Р вЂ™Р’ВµР В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°. Р В Р’В Р Р†Р вЂљРЎСљР В Р’В Р вЂ™Р’В»Р В Р’В Р РЋРІР‚ВР В Р’В Р В РІР‚В¦Р В Р’В Р вЂ™Р’В°: {result?.TotalLength:0.###} Р В Р’В Р РЋР’В.");
         return result;
         // END_BLOCK_EXECUTE_TRACE_FROM_BASE
     }
+
+    // START_CONTRACT: RecalculateByGroups
+    //   PURPOSE: Recalculate by groups.
+    //   INPUTS: none
+    //   OUTPUTS: { IReadOnlyList<GroupTraceAggregate> - result of recalculate by groups }
+    //   SIDE_EFFECTS: May read or update CAD/runtime/config state and diagnostics.
+    //   LINKS: M-CABLE-CALC
+    // END_CONTRACT: RecalculateByGroups
 
     public IReadOnlyList<GroupTraceAggregate> RecalculateByGroups()
     {
@@ -158,7 +187,7 @@ public class CableTraceService
             tr.Commit();
         }
 
-        _log.Write($"[CableTraceService][RecalculateByGroups][RECALCULATE] Групп: {aggregates.Count}, линий Default: {defaultInstallTypeLines}.");
+        _log.Write($"[CableTraceService][RecalculateByGroups][RECALCULATE] Р В Р’В Р Р†Р вЂљРЎС™Р В Р Р‹Р В РІР‚С™Р В Р Р‹Р РЋРІР‚СљР В Р’В Р РЋРІР‚вЂќР В Р’В Р РЋРІР‚вЂќ: {aggregates.Count}, Р В Р’В Р вЂ™Р’В»Р В Р’В Р РЋРІР‚ВР В Р’В Р В РІР‚В¦Р В Р’В Р РЋРІР‚ВР В Р’В Р Р†РІР‚С›РІР‚вЂњ Default: {defaultInstallTypeLines}.");
         return aggregates.Values
             .Select(a => new GroupTraceAggregate(
                 a.Shield,
@@ -171,6 +200,14 @@ public class CableTraceService
             .ToList();
         // END_BLOCK_RECALCULATE_BY_GROUPS
     }
+
+    // START_CONTRACT: BuildOrthogonalBranchPolyline
+    //   PURPOSE: Build orthogonal branch polyline.
+    //   INPUTS: { basePolyline: Polyline - method parameter; splitPoint: Point3d - method parameter; targetPoint: Point3d - method parameter }
+    //   OUTPUTS: { Polyline - result of build orthogonal branch polyline }
+    //   SIDE_EFFECTS: May modify CAD entities, configuration files, runtime state, or diagnostics.
+    //   LINKS: M-CABLE-CALC
+    // END_CONTRACT: BuildOrthogonalBranchPolyline
 
     private static Polyline BuildOrthogonalBranchPolyline(Polyline basePolyline, Point3d splitPoint, Point3d targetPoint)
     {
@@ -205,6 +242,14 @@ public class CableTraceService
         // END_BLOCK_BUILD_ORTHOGONAL_BRANCH_POLYLINE
     }
 
+    // START_CONTRACT: ApplyBasePolylineStyle
+    //   PURPOSE: Apply base polyline style.
+    //   INPUTS: { source: Polyline - method parameter; target: Polyline - method parameter }
+    //   OUTPUTS: { void - no return value }
+    //   SIDE_EFFECTS: May read or update CAD/runtime/config state and diagnostics.
+    //   LINKS: M-CABLE-CALC
+    // END_CONTRACT: ApplyBasePolylineStyle
+
     private static void ApplyBasePolylineStyle(Polyline source, Polyline target)
     {
         // START_BLOCK_APPLY_BASE_POLYLINE_STYLE
@@ -217,6 +262,14 @@ public class CableTraceService
         target.Transparency = source.Transparency;
         // END_BLOCK_APPLY_BASE_POLYLINE_STYLE
     }
+
+    // START_CONTRACT: BuildOrthogonalCorner
+    //   PURPOSE: Build orthogonal corner.
+    //   INPUTS: { splitPoint: Point3d - method parameter; targetPoint: Point3d - method parameter }
+    //   OUTPUTS: { Point2d - result of build orthogonal corner }
+    //   SIDE_EFFECTS: May modify CAD entities, configuration files, runtime state, or diagnostics.
+    //   LINKS: M-CABLE-CALC
+    // END_CONTRACT: BuildOrthogonalCorner
 
     private static Point2d BuildOrthogonalCorner(Point3d splitPoint, Point3d targetPoint)
     {
@@ -232,6 +285,14 @@ public class CableTraceService
         // END_BLOCK_BUILD_ORTHOGONAL_CORNER
     }
 
+    // START_CONTRACT: IsSamePoint2d
+    //   PURPOSE: Check whether same point2d.
+    //   INPUTS: { a: Point2d - method parameter; b: Point2d - method parameter }
+    //   OUTPUTS: { bool - true when method can check whether same point2d }
+    //   SIDE_EFFECTS: Reads CAD/runtime/config state and may emit diagnostics.
+    //   LINKS: M-CABLE-CALC
+    // END_CONTRACT: IsSamePoint2d
+
     private static bool IsSamePoint2d(Point2d a, Point2d b)
     {
         // START_BLOCK_COMPARE_POINTS_2D
@@ -239,6 +300,14 @@ public class CableTraceService
         return Math.Abs(a.X - b.X) < eps && Math.Abs(a.Y - b.Y) < eps;
         // END_BLOCK_COMPARE_POINTS_2D
     }
+
+    // START_CONTRACT: ReadHeight
+    //   PURPOSE: Read height.
+    //   INPUTS: { attributes: IReadOnlyDictionary<string, string> - method parameter }
+    //   OUTPUTS: { double - result of read height }
+    //   SIDE_EFFECTS: Reads CAD/runtime/config state and may emit diagnostics.
+    //   LINKS: M-CABLE-CALC
+    // END_CONTRACT: ReadHeight
 
     private static double ReadHeight(IReadOnlyDictionary<string, string> attributes)
     {
@@ -251,6 +320,14 @@ public class CableTraceService
         return double.TryParse(raw, out double value) ? value : 0;
         // END_BLOCK_READ_HEIGHT
     }
+
+    // START_CONTRACT: RegisterLoadBlock
+    //   PURPOSE: Register load block.
+    //   INPUTS: { aggregates: IDictionary<string, MutableAggregate> - method parameter; blockId: ObjectId - method parameter }
+    //   OUTPUTS: { void - no return value }
+    //   SIDE_EFFECTS: May modify CAD entities, configuration files, runtime state, or diagnostics.
+    //   LINKS: M-CABLE-CALC
+    // END_CONTRACT: RegisterLoadBlock
 
     private void RegisterLoadBlock(IDictionary<string, MutableAggregate> aggregates, ObjectId blockId)
     {
@@ -298,4 +375,3 @@ public class CableTraceService
         public Dictionary<string, double> LengthByInstallType { get; } = new(StringComparer.OrdinalIgnoreCase);
     }
 }
-

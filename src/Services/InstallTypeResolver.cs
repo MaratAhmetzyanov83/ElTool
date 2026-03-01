@@ -1,4 +1,4 @@
-﻿// FILE: src/Services/InstallTypeResolver.cs
+// FILE: src/Services/InstallTypeResolver.cs
 // VERSION: 1.1.0
 // START_MODULE_CONTRACT
 //   PURPOSE: Resolve install type by linetype/layer rules with deterministic priority and default fallback.
@@ -10,6 +10,11 @@
 // START_MODULE_MAP
 //   Resolve - Resolves first matching rule ordered by Priority.
 // END_MODULE_MAP
+
+// START_CHANGE_SUMMARY
+//   LAST_CHANGE: v1.0.0 - Added missing CHANGE_SUMMARY block for GRACE integrity refresh.
+// END_CHANGE_SUMMARY
+
 
 using ElTools.Models;
 using ElTools.Shared;
@@ -23,6 +28,14 @@ public interface IInstallTypeResolver
 
 public sealed class InstallTypeResolver : IInstallTypeResolver
 {
+    // START_CONTRACT: Resolve
+    //   PURPOSE: Resolve.
+    //   INPUTS: { linetypeResolved: string - method parameter; layerName: string - method parameter; rules: InstallTypeRuleSet - method parameter }
+    //   OUTPUTS: { string - textual result for resolve }
+    //   SIDE_EFFECTS: Reads CAD/runtime/config state and may emit diagnostics.
+    //   LINKS: M-INSTALL-TYPE-RESOLVER
+    // END_CONTRACT: Resolve
+
     public string Resolve(string linetypeResolved, string layerName, InstallTypeRuleSet rules)
     {
         // START_BLOCK_RESOLVE_INSTALL_TYPE
@@ -43,4 +56,3 @@ public sealed class InstallTypeResolver : IInstallTypeResolver
         // END_BLOCK_RESOLVE_INSTALL_TYPE
     }
 }
-
