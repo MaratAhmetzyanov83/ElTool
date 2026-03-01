@@ -3,8 +3,8 @@
 // START_MODULE_CONTRACT
 //   PURPOSE: Export specification dataset to AutoCAD table and CSV.
 //   SCOPE: Table render in drawing and CSV file generation.
-//   DEPENDS: M-SPEC, M-ACAD, M-LOG
-//   LINKS: M-EXPORT, M-SPEC, M-ACAD, M-LOG
+//   DEPENDS: M-AGGREGATION, M-CAD-CONTEXT, M-LOGGING, M-EXCEL-GATEWAY
+//   LINKS: M-EXPORT, M-AGGREGATION, M-CAD-CONTEXT, M-LOGGING, M-EXCEL-GATEWAY
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP
@@ -212,3 +212,4 @@ public class SpecExportService
 
     private sealed record CachedExcelOutput(DateTime ImportedAtUtc, IReadOnlyList<ExcelOutputRow> Rows);
 }
+

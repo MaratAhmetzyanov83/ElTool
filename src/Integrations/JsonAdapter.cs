@@ -4,7 +4,7 @@
 //   PURPOSE: Serialize and deserialize plugin settings using Newtonsoft.Json.
 //   SCOPE: Safe JSON serialization and deserialization helpers.
 //   DEPENDS: none
-//   LINKS: M-JSON
+//   LINKS: M-JSON-ADAPTER
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP
@@ -37,3 +37,4 @@ public class JsonAdapter
         // END_BLOCK_DESERIALIZE
     }
 }
+

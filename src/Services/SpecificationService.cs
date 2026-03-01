@@ -3,8 +3,8 @@
 // START_MODULE_CONTRACT
 //   PURPOSE: Scan drawing EOM_DATA and aggregate cable lengths by type and group.
 //   SCOPE: Reads XData records and groups by type/group.
-//   DEPENDS: M-XDATA, M-SETTINGS, M-LOG
-//   LINKS: M-SPEC, M-XDATA, M-SETTINGS, M-LOG
+//   DEPENDS: M-XDATA, M-SETTINGS, M-LOGGING, M-MODELS
+//   LINKS: M-AGGREGATION, M-XDATA, M-SETTINGS, M-LOGGING, M-MODELS
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP
@@ -78,3 +78,4 @@ public class SpecificationService
         // END_BLOCK_COLLECT_MODEL_SPACE_ENTITY_IDS
     }
 }
+

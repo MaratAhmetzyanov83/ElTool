@@ -4,7 +4,7 @@
 //   PURPOSE: Provide safe access to AutoCAD document, editor, database, transactions, and coordinate conversions.
 //   SCOPE: Active document access, transaction wrapper, UCS->WCS conversion.
 //   DEPENDS: none
-//   LINKS: M-ACAD
+//   LINKS: M-CAD-CONTEXT
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP
@@ -111,3 +111,4 @@ public class AutoCADAdapter
         // END_BLOCK_RESOLVE_LINETYPE
     }
 }
+

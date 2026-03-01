@@ -3,8 +3,8 @@
 // START_MODULE_CONTRACT
 //   PURPOSE: Validate license state before command execution.
 //   SCOPE: Reads local settings and validates HWID policy.
-//   DEPENDS: M-SYSMGMT, M-SETTINGS, M-LOG
-//   LINKS: M-LICENSE, M-SYSMGMT, M-SETTINGS, M-LOG
+//   DEPENDS: M-HARDWARE-PROBE, M-SETTINGS, M-LOGGING, M-MODELS
+//   LINKS: M-LICENSE, M-HARDWARE-PROBE, M-SETTINGS, M-LOGGING, M-MODELS
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP
@@ -40,3 +40,4 @@ public class LicenseService
         // END_BLOCK_VALIDATE_LICENSE
     }
 }
+

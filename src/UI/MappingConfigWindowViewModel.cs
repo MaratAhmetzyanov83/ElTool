@@ -3,8 +3,8 @@
 // START_MODULE_CONTRACT
 //   PURPOSE: Provide Russian UI state and hints for mapping profile configuration.
 //   SCOPE: Load, edit, validate, and save mapping rules from Settings.json.
-//   DEPENDS: M-SETTINGS, M-LOG
-//   LINKS: M-SETTINGS, M-LOG, M-MAP
+//   DEPENDS: M-SETTINGS, M-LOGGING, M-MODELS
+//   LINKS: M-MAP-CONFIG-VM, M-SETTINGS, M-LOGGING, M-MODELS
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP
@@ -245,3 +245,4 @@ public sealed partial class MappingRuleItem : ObservableObject
         // END_BLOCK_MAPPING_RULE_TO_RULE
     }
 }
+

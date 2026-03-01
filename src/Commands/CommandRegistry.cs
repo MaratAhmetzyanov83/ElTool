@@ -1,21 +1,25 @@
 ﻿// FILE: src/Commands/CommandRegistry.cs
-// VERSION: 1.0.0
+// VERSION: 1.6.0
 // START_MODULE_CONTRACT
-//   PURPOSE: Register AutoCAD commands and dispatch to domain services.
-//   SCOPE: EOM_MAP, EOM_TRACE, EOM_SPEC command handlers.
-//   DEPENDS: M-MAP, M-TRACE, M-SPEC, M-EXPORT, M-LICENSE, M-LOG
-//   LINKS: M-COMMANDS, M-MAP, M-TRACE, M-SPEC, M-EXPORT, M-LICENSE, M-LOG
+//   PURPOSE: Register and execute AutoCAD entry commands for mapping, tracing, Excel workflows, OLS generation, panel layout, and validation.
+//   SCOPE: Full command lifecycle from user prompts to orchestrator/service calls and drawing output generation.
+//   DEPENDS: M-MAP-ORCHESTRATOR, M-TRACE-ORCHESTRATOR, M-SPEC-ORCHESTRATOR, M-SELECTION, M-EXPORT, M-SETTINGS, M-XDATA, M-CAD-CONTEXT, M-LOGGING, M-LICENSE, M-PANEL-LAYOUT-CONFIG-UI, M-PANEL-LAYOUT-CONFIG-VM
+//   LINKS: M-ENTRY-COMMANDS, M-MAP-ORCHESTRATOR, M-TRACE-ORCHESTRATOR, M-SPEC-ORCHESTRATOR, M-SELECTION, M-EXPORT, M-SETTINGS, M-XDATA, M-CAD-CONTEXT, M-LOGGING, M-CONFIG, M-PANEL-LAYOUT-CONFIG-UI, M-PANEL-LAYOUT-CONFIG-VM
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP
 //   EomMap - Executes block mapping workflow.
 //   EomTrace - Executes cable trace workflow.
 //   EomSpec - Executes specification workflow.
-//   EomMapCfg - Opens mapping configuration window.
+//   EomBuildOls - Draws one-line diagram from Excel OUTPUT.
+//   EomPanelLayoutConfig - Opens UI editor for panel layout map and SOURCE->LAYOUT bindings.
+//   EomBuildPanelLayout - Builds panel layout from user-selected OLS blocks using panel mapping configuration.
+//   EomBindPanelLayoutVisualization - Creates and stores source OLS to visualization block selector rule.
+//   BuildPanelLayoutModel - Converts mapped OLS devices to normalized DIN placement model.
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: v1.1.0 - Updated EOM_MAP to direct source/target selection and replacement without attribute transfer.
+//   LAST_CHANGE: v1.6.0 - Added panel layout configuration UI with drawing-based SOURCE/LAYOUT binding selection.
 // END_CHANGE_SUMMARY
 
 using Autodesk.AutoCAD.Runtime;
@@ -163,24 +167,42 @@ public class CommandRegistry
             return;
         }
 
+        if (!TryResolveExcelTemplatePath(PluginConfig.Commands.Spec, out string templatePath))
+        {
+            return;
+        }
+
         IReadOnlyList<SpecificationRow> rows = _spec.BuildSpecification(Array.Empty<ObjectId>());
         _export.ToAutoCadTable(rows);
         _export.ToCsv(rows);
-        string templatePath = _settings.LoadSettings().ExcelTemplatePath;
         IReadOnlyList<GroupTraceAggregate> aggregates = _trace.RecalculateByGroups();
         _export.ToExcelInput(templatePath, aggregates.Select(ToExcelInputRow).ToList());
-        IReadOnlyList<ExcelOutputRow> outputRows = _export.GetCachedOrLoadOutput(templatePath);
+        bool cacheHit = _export.TryGetCachedOutput(templatePath, out IReadOnlyList<ExcelOutputRow> outputRows);
+        if (!cacheHit)
+        {
+            string outputPath = GetExpectedExcelOutputPath(templatePath);
+            if (File.Exists(outputPath))
+            {
+                outputRows = _export.GetCachedOrLoadOutput(templatePath);
+            }
+            else
+            {
+                _log.Write($"EOM_SPEC: файл OUTPUT не найден ({outputPath}). Выполните расчет и запустите EOM_ИМПОРТ_EXCEL.");
+            }
+        }
+
         if (outputRows.Count > 0)
         {
             _export.ExportExcelOutputReportCsv(outputRows);
             _export.ToAutoCadTableFromOutput(outputRows, new Point3d(0, -120, 0));
         }
 
-        _log.Write("EOM_SPEC завершена.");
+        string inputPath = GetExpectedExcelInputPath(templatePath);
+        _log.Write($"EOM_SPEC завершена. INPUT: {inputPath}");
         // END_BLOCK_COMMAND_EOM_SPEC
     }
 
-    [CommandMethod("EOM_MAPCFG")]
+    [CommandMethod(PluginConfig.Commands.MapConfig)]
     public void EomMapCfg()
     {
         // START_BLOCK_COMMAND_EOM_MAPCFG
@@ -196,6 +218,26 @@ public class CommandRegistry
             _log.Write($"Ошибка открытия окна настройки соответствий: {ex.Message}");
         }
         // END_BLOCK_COMMAND_EOM_MAPCFG
+    }
+
+    [CommandMethod(PluginConfig.Commands.PanelLayoutConfig)]
+    public void EomPanelLayoutConfig()
+    {
+        // START_BLOCK_COMMAND_EOM_PANEL_LAYOUT_CONFIG
+        try
+        {
+            var vm = new PanelLayoutConfigWindowViewModel(
+                PickPanelLayoutSourceSignatureFromDrawing,
+                PickPanelLayoutVisualizationBlockFromDrawing);
+            var window = new PanelLayoutConfigWindow(vm);
+            Application.ShowModalWindow(window);
+            _log.Write("Окно настройки компоновки щита закрыто.");
+        }
+        catch (System.Exception ex)
+        {
+            _log.Write($"Ошибка открытия окна настройки компоновки щита: {ex.Message}");
+        }
+        // END_BLOCK_COMMAND_EOM_PANEL_LAYOUT_CONFIG
     }
 
     [CommandMethod(PluginConfig.Commands.ActiveGroup)]
@@ -276,12 +318,16 @@ public class CommandRegistry
     public void EomExportExcel()
     {
         // START_BLOCK_COMMAND_EOM_EXPORT_EXCEL
+        if (!TryResolveExcelTemplatePath(PluginConfig.Commands.ExportExcel, out string templatePath))
+        {
+            return;
+        }
+
         IReadOnlyList<GroupTraceAggregate> aggregates = _trace.RecalculateByGroups();
-        string templatePath = _settings.LoadSettings().ExcelTemplatePath;
         _export.ClearCachedOutput(templatePath);
         var inputRows = aggregates.Select(ToExcelInputRow).ToList();
         _export.ToExcelInput(templatePath, inputRows);
-        _log.Write("EOM_ЭКСПОРТ_EXCEL завершена.");
+        _log.Write($"EOM_ЭКСПОРТ_EXCEL завершена. INPUT: {GetExpectedExcelInputPath(templatePath)}");
         // END_BLOCK_COMMAND_EOM_EXPORT_EXCEL
     }
 
@@ -289,7 +335,18 @@ public class CommandRegistry
     public void EomImportExcel()
     {
         // START_BLOCK_COMMAND_EOM_IMPORT_EXCEL
-        string templatePath = _settings.LoadSettings().ExcelTemplatePath;
+        if (!TryResolveExcelTemplatePath(PluginConfig.Commands.ImportExcel, out string templatePath))
+        {
+            return;
+        }
+
+        string outputPath = GetExpectedExcelOutputPath(templatePath);
+        if (!File.Exists(outputPath))
+        {
+            _log.Write($"EOM_ИМПОРТ_EXCEL: не найден файл OUTPUT: {outputPath}. Сначала заполните расчет и сохраните OUTPUT.");
+            return;
+        }
+
         IReadOnlyList<ExcelOutputRow> rows = _export.FromExcelOutput(templatePath);
         if (rows.Count > 0)
         {
@@ -304,16 +361,27 @@ public class CommandRegistry
     public void EomBuildOls()
     {
         // START_BLOCK_COMMAND_EOM_BUILD_OLS
-        string templatePath = _settings.LoadSettings().ExcelTemplatePath;
+        if (!TryResolveExcelTemplatePath(PluginConfig.Commands.BuildOls, out string templatePath))
+        {
+            return;
+        }
+
+        string outputPath = GetExpectedExcelOutputPath(templatePath);
         bool cacheHit = _export.TryGetCachedOutput(templatePath, out IReadOnlyList<ExcelOutputRow> rows);
         if (!cacheHit)
         {
+            if (!File.Exists(outputPath))
+            {
+                _log.Write($"EOM_ПОСТРОИТЬ_ОЛС: не найден OUTPUT ({outputPath}). Выполните EOM_ИМПОРТ_EXCEL.");
+                return;
+            }
+
             rows = _export.GetCachedOrLoadOutput(templatePath);
         }
 
         if (rows.Count == 0)
         {
-            _log.Write("EOM_ПОСТРОИТЬ_ОЛС: нет строк OUTPUT для построения.");
+            _log.Write($"EOM_ПОСТРОИТЬ_ОЛС: OUTPUT пустой ({outputPath}).");
             return;
         }
 
@@ -345,25 +413,69 @@ public class CommandRegistry
     public void EomBuildPanelLayout()
     {
         // START_BLOCK_COMMAND_EOM_BUILD_PANEL_LAYOUT
-        string templatePath = _settings.LoadSettings().ExcelTemplatePath;
-        bool cacheHit = _export.TryGetCachedOutput(templatePath, out IReadOnlyList<ExcelOutputRow> rows);
-        if (!cacheHit)
-        {
-            rows = _export.GetCachedOrLoadOutput(templatePath);
-        }
-
-        if (rows.Count == 0)
-        {
-            _log.Write("EOM_КОМПОНОВКА_ЩИТА: нет строк OUTPUT для построения.");
-            return;
-        }
-
+        SettingsModel settings = _settings.LoadSettings();
+        PanelLayoutMapConfig mapConfig = _settings.LoadPanelLayoutMap();
         Document? doc = Application.DocumentManager.MdiActiveDocument;
         if (doc is null)
         {
             return;
         }
 
+        PromptSelectionOptions selectionOptions = new()
+        {
+            MessageForAdding = "\nВыделите готовую однолинейную схему (блоки аппаратов): "
+        };
+        SelectionFilter filter = new([
+            new TypedValue((int)DxfCode.Start, "INSERT")
+        ]);
+        PromptSelectionResult selection = doc.Editor.GetSelection(selectionOptions, filter);
+        if (selection.Status != PromptStatus.OK)
+        {
+            _log.Write("EOM_КОМПОНОВКА_ЩИТА отменена: ОЛС не выделена.");
+            return;
+        }
+
+        ObjectId[] selectedIds = selection.Value.GetObjectIds();
+        if (selectedIds.Length == 0)
+        {
+            _log.Write("EOM_КОМПОНОВКА_ЩИТА: не выбраны блоки ОЛС.");
+            return;
+        }
+
+        ParsedOlsSelection parsedSelection = ParseOlsSelection(doc, selectedIds, mapConfig.AttributeTags);
+        IReadOnlyList<MappedLayoutDevice> mappedDevices = MapOlsDevices(
+            parsedSelection.Devices,
+            mapConfig.SelectorRules ?? [],
+            mapConfig.LayoutMap ?? [],
+            out List<SkippedOlsDeviceIssue> mappingIssues);
+        var issues = new List<SkippedOlsDeviceIssue>(parsedSelection.Issues.Count + mappingIssues.Count);
+        issues.AddRange(parsedSelection.Issues);
+        issues.AddRange(mappingIssues);
+
+        if (mappedDevices.Count == 0)
+        {
+            ReportSkippedOlsDevices(issues);
+            _log.Write("EOM_КОМПОНОВКА_ЩИТА: нет валидных правил сопоставления (нужны SelectorRules либо legacy LayoutMap + МОДУЛЕЙ/FallbackModules).");
+            return;
+        }
+
+        int defaultModulesPerRow = mapConfig.DefaultModulesPerRow > 0
+            ? mapConfig.DefaultModulesPerRow
+            : (settings.PanelModulesPerRow > 0 ? settings.PanelModulesPerRow : 24);
+        PromptIntegerOptions modulesOptions = new($"\nМодулей в ряду [Enter = {defaultModulesPerRow}]: ")
+        {
+            AllowNone = true,
+            LowerLimit = 1,
+            UpperLimit = 72
+        };
+        PromptIntegerResult modulesResult = doc.Editor.GetInteger(modulesOptions);
+        if (modulesResult.Status == PromptStatus.Cancel)
+        {
+            _log.Write("EOM_КОМПОНОВКА_ЩИТА отменена.");
+            return;
+        }
+
+        int modulesPerRow = modulesResult.Status == PromptStatus.OK ? modulesResult.Value : defaultModulesPerRow;
         PromptPointResult pointResult = doc.Editor.GetPoint("\nУкажите точку вставки компоновки щита: ");
         if (pointResult.Status != PromptStatus.OK)
         {
@@ -371,10 +483,152 @@ public class CommandRegistry
             return;
         }
 
-        int modulesPerRow = _settings.LoadSettings().PanelModulesPerRow;
-        DrawPanelLayout(rows, pointResult.Value, modulesPerRow);
-        _log.Write($"EOM_КОМПОНОВКА_ЩИТА: строк {rows.Count}, модулей в ряду {modulesPerRow}, источник={(cacheHit ? "кэш" : "файл")}.");
+        IReadOnlyList<PanelLayoutRow> layoutRows = BuildPanelLayoutModel(mappedDevices, modulesPerRow);
+        if (layoutRows.Count == 0)
+        {
+            _log.Write("EOM_КОМПОНОВКА_ЩИТА: не сформирована модель раскладки.");
+            return;
+        }
+
+        int renderedSegments = DrawPanelLayout(layoutRows, pointResult.Value, modulesPerRow, out List<SkippedOlsDeviceIssue> renderIssues);
+        issues.AddRange(renderIssues);
+        ReportSkippedOlsDevices(issues);
+
+        int dinRows = layoutRows.Max(x => x.DinRow);
+        int uniqueDevices = layoutRows
+            .Select(x => x.EntityId)
+            .Distinct()
+            .Count();
+        _log.Write(
+            $"EOM_КОМПОНОВКА_ЩИТА: выделено блоков {selectedIds.Length}, валидных блоков {parsedSelection.Devices.Count}, отрисовано устройств {uniqueDevices}, сегментов {renderedSegments}, рядов DIN {dinRows}, пропущено {issues.Count}.");
         // END_BLOCK_COMMAND_EOM_BUILD_PANEL_LAYOUT
+    }
+
+    [CommandMethod(PluginConfig.Commands.BindPanelLayoutVisualization)]
+    public void EomBindPanelLayoutVisualization()
+    {
+        // START_BLOCK_COMMAND_EOM_BIND_PANEL_LAYOUT_VISUALIZATION
+        Document? doc = Application.DocumentManager.MdiActiveDocument;
+        if (doc is null)
+        {
+            return;
+        }
+
+        PanelLayoutMapConfig mapConfig = _settings.LoadPanelLayoutMap();
+
+        var sourceOptions = new PromptEntityOptions("\nВыберите исходный блок ОЛС для привязки: ");
+        sourceOptions.SetRejectMessage("\nНужен блок (BlockReference).");
+        sourceOptions.AddAllowedClass(typeof(BlockReference), true);
+        PromptEntityResult sourceResult = doc.Editor.GetEntity(sourceOptions);
+        if (sourceResult.Status != PromptStatus.OK)
+        {
+            _log.Write("EOM_СВЯЗАТЬ_ВИЗУАЛИЗАЦИЮ отменена: исходный блок ОЛС не выбран.");
+            return;
+        }
+
+        if (!TryReadSourceSignature(doc, sourceResult.ObjectId, out OlsSourceSignature signature))
+        {
+            _log.Write("EOM_СВЯЗАТЬ_ВИЗУАЛИЗАЦИЮ: не удалось прочитать сигнатуру исходного блока.");
+            return;
+        }
+
+        var targetOptions = new PromptEntityOptions("\nВыберите блок визуализации для компоновки щита: ");
+        targetOptions.SetRejectMessage("\nНужен блок (BlockReference).");
+        targetOptions.AddAllowedClass(typeof(BlockReference), true);
+        PromptEntityResult targetResult = doc.Editor.GetEntity(targetOptions);
+        if (targetResult.Status != PromptStatus.OK)
+        {
+            _log.Write("EOM_СВЯЗАТЬ_ВИЗУАЛИЗАЦИЮ отменена: блок визуализации не выбран.");
+            return;
+        }
+
+        if (!TryReadEffectiveBlockName(doc, targetResult.ObjectId, out string layoutBlockName))
+        {
+            _log.Write("EOM_СВЯЗАТЬ_ВИЗУАЛИЗАЦИЮ: не удалось определить имя блока визуализации.");
+            return;
+        }
+
+        PromptIntegerOptions priorityOptions = new("\nПриоритет правила [Enter = 100]: ")
+        {
+            AllowNone = true,
+            LowerLimit = 0,
+            UpperLimit = 10000
+        };
+        PromptIntegerResult priorityResult = doc.Editor.GetInteger(priorityOptions);
+        if (priorityResult.Status == PromptStatus.Cancel)
+        {
+            _log.Write("EOM_СВЯЗАТЬ_ВИЗУАЛИЗАЦИЮ отменена.");
+            return;
+        }
+
+        int priority = priorityResult.Status == PromptStatus.OK ? priorityResult.Value : 100;
+        PromptIntegerOptions fallbackOptions = new("\nFallback модулей [Enter = без fallback]: ")
+        {
+            AllowNone = true,
+            LowerLimit = 1,
+            UpperLimit = 72
+        };
+        PromptIntegerResult fallbackResult = doc.Editor.GetInteger(fallbackOptions);
+        if (fallbackResult.Status == PromptStatus.Cancel)
+        {
+            _log.Write("EOM_СВЯЗАТЬ_ВИЗУАЛИЗАЦИЮ отменена.");
+            return;
+        }
+
+        int? fallbackModules = fallbackResult.Status == PromptStatus.OK ? fallbackResult.Value : null;
+        string normalizedSourceName = signature.SourceBlockName.Trim();
+        string? normalizedVisibility = string.IsNullOrWhiteSpace(signature.VisibilityValue) ? null : signature.VisibilityValue.Trim();
+        string normalizedLayoutName = layoutBlockName.Trim();
+
+        PanelLayoutSelectorRule newRule = new(
+            Priority: priority,
+            SourceBlockName: normalizedSourceName,
+            VisibilityValue: normalizedVisibility,
+            LayoutBlockName: normalizedLayoutName,
+            FallbackModules: fallbackModules);
+
+        List<PanelLayoutSelectorRule> existingRules = (mapConfig.SelectorRules ?? [])
+            .Where(x => x is not null)
+            .ToList();
+
+        int existingIndex = existingRules.FindIndex(x =>
+            string.Equals(x.SourceBlockName, normalizedSourceName, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(x.VisibilityValue ?? string.Empty, normalizedVisibility ?? string.Empty, StringComparison.OrdinalIgnoreCase));
+
+        if (existingIndex >= 0)
+        {
+            existingRules[existingIndex] = newRule;
+        }
+        else
+        {
+            existingRules.Add(newRule);
+        }
+
+        mapConfig.SelectorRules = existingRules
+            .OrderBy(x => x.Priority)
+            .ThenBy(x => x.SourceBlockName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.VisibilityValue ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        _settings.SavePanelLayoutMap(mapConfig);
+
+        string visibilityPart = string.IsNullOrWhiteSpace(normalizedVisibility)
+            ? "*"
+            : normalizedVisibility;
+        string fallbackPart = fallbackModules.HasValue
+            ? fallbackModules.Value.ToString()
+            : "none";
+        _log.Write(
+            $"EOM_СВЯЗАТЬ_ВИЗУАЛИЗАЦИЮ: сохранено правило SOURCE='{normalizedSourceName}', VISIBILITY='{visibilityPart}' -> LAYOUT='{normalizedLayoutName}', PRIORITY={priority}, FALLBACK_MODULES={fallbackPart}.");
+        // END_BLOCK_COMMAND_EOM_BIND_PANEL_LAYOUT_VISUALIZATION
+    }
+
+    [CommandMethod(PluginConfig.Commands.BindPanelLayoutVisualizationAlias)]
+    public void EomBindPanelLayoutVisualizationAlias()
+    {
+        // START_BLOCK_COMMAND_EOM_BIND_PANEL_LAYOUT_VISUALIZATION_ALIAS
+        EomBindPanelLayoutVisualization();
+        // END_BLOCK_COMMAND_EOM_BIND_PANEL_LAYOUT_VISUALIZATION_ALIAS
     }
 
     [CommandMethod(PluginConfig.Commands.Validate)]
@@ -561,6 +815,104 @@ public class CommandRegistry
         // END_BLOCK_ON_OBJECT_APPENDED
     }
 
+    private OlsSourceSignature? PickPanelLayoutSourceSignatureFromDrawing()
+    {
+        // START_BLOCK_PICK_PANEL_LAYOUT_SOURCE_SIGNATURE
+        Document? doc = Application.DocumentManager.MdiActiveDocument;
+        if (doc is null)
+        {
+            return null;
+        }
+
+        var sourceOptions = new PromptEntityOptions("\nВыберите исходный блок ОЛС: ");
+        sourceOptions.SetRejectMessage("\nНужен блок (BlockReference).");
+        sourceOptions.AddAllowedClass(typeof(BlockReference), true);
+        PromptEntityResult sourceResult = doc.Editor.GetEntity(sourceOptions);
+        if (sourceResult.Status != PromptStatus.OK)
+        {
+            return null;
+        }
+
+        if (!TryReadSourceSignature(doc, sourceResult.ObjectId, out OlsSourceSignature signature))
+        {
+            _log.Write("Настройка компоновки: не удалось прочитать SOURCE (имя блока/видимость).");
+            return null;
+        }
+
+        return signature;
+        // END_BLOCK_PICK_PANEL_LAYOUT_SOURCE_SIGNATURE
+    }
+
+    private string? PickPanelLayoutVisualizationBlockFromDrawing()
+    {
+        // START_BLOCK_PICK_PANEL_LAYOUT_VISUALIZATION_BLOCK
+        Document? doc = Application.DocumentManager.MdiActiveDocument;
+        if (doc is null)
+        {
+            return null;
+        }
+
+        var targetOptions = new PromptEntityOptions("\nВыберите блок визуализации: ");
+        targetOptions.SetRejectMessage("\nНужен блок (BlockReference).");
+        targetOptions.AddAllowedClass(typeof(BlockReference), true);
+        PromptEntityResult targetResult = doc.Editor.GetEntity(targetOptions);
+        if (targetResult.Status != PromptStatus.OK)
+        {
+            return null;
+        }
+
+        if (!TryReadEffectiveBlockName(doc, targetResult.ObjectId, out string layoutBlockName))
+        {
+            _log.Write("Настройка компоновки: не удалось определить имя блока визуализации.");
+            return null;
+        }
+
+        return layoutBlockName.Trim();
+        // END_BLOCK_PICK_PANEL_LAYOUT_VISUALIZATION_BLOCK
+    }
+
+    private bool TryResolveExcelTemplatePath(string command, out string templatePath)
+    {
+        // START_BLOCK_TRY_RESOLVE_EXCEL_TEMPLATE_PATH
+        templatePath = string.Empty;
+        try
+        {
+            SettingsModel settings = _settings.LoadSettings();
+            templatePath = _settings.ResolveTemplatePath(settings.ExcelTemplatePath);
+            if (string.IsNullOrWhiteSpace(Path.GetFileNameWithoutExtension(templatePath)))
+            {
+                _log.Write($"{command}: некорректный путь шаблона Excel. Проверьте поле ExcelTemplatePath в Settings.json.");
+                return false;
+            }
+
+            return true;
+        }
+        catch (System.Exception ex)
+        {
+            _log.Write($"{command}: ошибка чтения пути шаблона Excel: {ex.Message}");
+            return false;
+        }
+        // END_BLOCK_TRY_RESOLVE_EXCEL_TEMPLATE_PATH
+    }
+
+    private static string GetExpectedExcelInputPath(string templatePath)
+    {
+        // START_BLOCK_GET_EXPECTED_EXCEL_INPUT_PATH
+        string directory = Path.GetDirectoryName(templatePath) ?? string.Empty;
+        string fileName = Path.GetFileNameWithoutExtension(templatePath);
+        return Path.Combine(string.IsNullOrWhiteSpace(directory) ? "." : directory, $"{fileName}.INPUT.csv");
+        // END_BLOCK_GET_EXPECTED_EXCEL_INPUT_PATH
+    }
+
+    private static string GetExpectedExcelOutputPath(string templatePath)
+    {
+        // START_BLOCK_GET_EXPECTED_EXCEL_OUTPUT_PATH
+        string directory = Path.GetDirectoryName(templatePath) ?? string.Empty;
+        string fileName = Path.GetFileNameWithoutExtension(templatePath);
+        return Path.Combine(string.IsNullOrWhiteSpace(directory) ? "." : directory, $"{fileName}.OUTPUT.csv");
+        // END_BLOCK_GET_EXPECTED_EXCEL_OUTPUT_PATH
+    }
+
     private static ExcelInputRow ToExcelInputRow(GroupTraceAggregate row)
     {
         // START_BLOCK_TO_EXCEL_INPUT_ROW
@@ -652,6 +1004,7 @@ public class CommandRegistry
         {
             BlockTable bt = (BlockTable)tr.GetObject(doc.Database.BlockTableId, OpenMode.ForRead);
             BlockTableRecord ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
+            EnsureRegApp(tr, doc.Database, PluginConfig.Metadata.OlsLayoutAppName);
 
             double y = basePoint.Y;
             const double step = 14.0;
@@ -697,6 +1050,7 @@ public class CommandRegistry
                 };
                 ms.AppendEntity(label);
                 tr.AddNewlyCreatedDBObject(label, true);
+                WriteOlsRowMetadata(label, row);
 
                 y -= step;
             }
@@ -706,19 +1060,493 @@ public class CommandRegistry
         // END_BLOCK_DRAW_OLS_ROWS
     }
 
-    private static void DrawPanelLayout(IReadOnlyList<ExcelOutputRow> rows, Point3d basePoint, int modulesPerRow)
+    private static void WriteOlsRowMetadata(Entity entity, ExcelOutputRow row)
     {
-        // START_BLOCK_DRAW_PANEL_LAYOUT
-        Document? doc = Application.DocumentManager.MdiActiveDocument;
-        if (doc is null || rows.Count == 0)
+        // START_BLOCK_WRITE_OLS_ROW_METADATA
+        UpsertEntityXData(entity, PluginConfig.Metadata.OlsLayoutAppName, [
+            new TypedValue((int)DxfCode.ExtendedDataAsciiString, "OLS_ROW"),
+            new TypedValue((int)DxfCode.ExtendedDataAsciiString, row.Shield ?? string.Empty),
+            new TypedValue((int)DxfCode.ExtendedDataAsciiString, row.Group ?? string.Empty),
+            new TypedValue((int)DxfCode.ExtendedDataAsciiString, row.CircuitBreaker ?? string.Empty),
+            new TypedValue((int)DxfCode.ExtendedDataAsciiString, row.RcdDiff ?? string.Empty),
+            new TypedValue((int)DxfCode.ExtendedDataAsciiString, row.Cable ?? string.Empty),
+            new TypedValue((int)DxfCode.ExtendedDataInteger16, (short)Math.Clamp(row.CircuitBreakerModules, 0, short.MaxValue)),
+            new TypedValue((int)DxfCode.ExtendedDataInteger16, (short)Math.Clamp(row.RcdModules, 0, short.MaxValue)),
+            new TypedValue((int)DxfCode.ExtendedDataAsciiString, row.Note ?? string.Empty)
+        ]);
+        // END_BLOCK_WRITE_OLS_ROW_METADATA
+    }
+
+    private static IReadOnlyList<ExcelOutputRow> ReadOlsRowsFromDrawing(Document doc)
+    {
+        // START_BLOCK_READ_OLS_ROWS_FROM_DRAWING
+        var rows = new List<ExcelOutputRow>();
+        using (doc.LockDocument())
+        using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
         {
-            return;
+            BlockTable blockTable = (BlockTable)tr.GetObject(doc.Database.BlockTableId, OpenMode.ForRead);
+            BlockTableRecord modelSpace = (BlockTableRecord)tr.GetObject(blockTable[BlockTableRecord.ModelSpace], OpenMode.ForRead);
+            foreach (ObjectId id in modelSpace)
+            {
+                if (tr.GetObject(id, OpenMode.ForRead) is not Entity entity)
+                {
+                    continue;
+                }
+
+                ExcelOutputRow? row = TryParseOlsRowFromEntity(entity);
+                if (row is not null)
+                {
+                    rows.Add(row);
+                }
+            }
+
+            tr.Commit();
+        }
+
+        return rows;
+        // END_BLOCK_READ_OLS_ROWS_FROM_DRAWING
+    }
+
+    private static ExcelOutputRow? TryParseOlsRowFromEntity(Entity entity)
+    {
+        // START_BLOCK_TRY_PARSE_OLS_ROW_FROM_ENTITY
+        if (entity.XData is null)
+        {
+            return null;
+        }
+
+        TypedValue[] values = entity.XData.AsArray();
+        for (int i = 0; i < values.Length; i++)
+        {
+            if (values[i].TypeCode != (int)DxfCode.ExtendedDataRegAppName)
+            {
+                continue;
+            }
+
+            string appName = values[i].Value?.ToString() ?? string.Empty;
+            if (!string.Equals(appName, PluginConfig.Metadata.OlsLayoutAppName, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (i + 8 >= values.Length)
+            {
+                return null;
+            }
+
+            string marker = values[i + 1].Value?.ToString() ?? string.Empty;
+            if (!string.Equals(marker, "OLS_ROW", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            return new ExcelOutputRow(
+                Shield: values[i + 2].Value?.ToString() ?? string.Empty,
+                Group: values[i + 3].Value?.ToString() ?? string.Empty,
+                CircuitBreaker: values[i + 4].Value?.ToString() ?? string.Empty,
+                RcdDiff: values[i + 5].Value?.ToString() ?? string.Empty,
+                Cable: values[i + 6].Value?.ToString() ?? string.Empty,
+                CircuitBreakerModules: ToIntOrDefault(values[i + 7].Value),
+                RcdModules: ToIntOrDefault(values[i + 8].Value),
+                Note: i + 9 < values.Length ? values[i + 9].Value?.ToString() : null);
+        }
+
+        return null;
+        // END_BLOCK_TRY_PARSE_OLS_ROW_FROM_ENTITY
+    }
+
+    private static int ToIntOrDefault(object? value)
+    {
+        // START_BLOCK_TO_INT_OR_DEFAULT
+        if (value is short shortValue)
+        {
+            return shortValue;
+        }
+
+        if (value is int intValue)
+        {
+            return intValue;
+        }
+
+        return int.TryParse(value?.ToString(), out int parsed) ? parsed : 0;
+        // END_BLOCK_TO_INT_OR_DEFAULT
+    }
+
+    private static ParsedOlsSelection ParseOlsSelection(
+        Document doc,
+        IReadOnlyList<ObjectId> selectedIds,
+        PanelLayoutAttributeTags tags)
+    {
+        // START_BLOCK_PARSE_OLS_SELECTION
+        var devices = new List<OlsSelectedDevice>();
+        var issues = new List<SkippedOlsDeviceIssue>();
+
+        using (doc.LockDocument())
+        using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
+        {
+            foreach (ObjectId id in selectedIds)
+            {
+                if (tr.GetObject(id, OpenMode.ForRead) is not BlockReference block)
+                {
+                    issues.Add(new SkippedOlsDeviceIssue(id, "Объект не является BlockReference."));
+                    continue;
+                }
+
+                IReadOnlyDictionary<string, string> attrs = ReadBlockAttributes(tr, block);
+                attrs.TryGetValue(tags.Device, out string? rawDevice);
+                attrs.TryGetValue(tags.Modules, out string? rawModules);
+                int modules = TryParsePositiveInt(rawModules, out int parsedModules) ? parsedModules : 0;
+
+                string sourceBlockName = ResolveEffectiveBlockName(tr, block);
+                if (string.IsNullOrWhiteSpace(sourceBlockName))
+                {
+                    issues.Add(new SkippedOlsDeviceIssue(id, "Не удалось определить имя исходного блока ОЛС."));
+                    continue;
+                }
+
+                string? visibilityValue = ResolveVisibilityValue(block);
+                attrs.TryGetValue(tags.Group, out string? group);
+                attrs.TryGetValue(tags.Note, out string? note);
+                devices.Add(new OlsSelectedDevice(
+                    EntityId: id,
+                    SourceBlockName: sourceBlockName,
+                    SourceSignature: new OlsSourceSignature(sourceBlockName, visibilityValue),
+                    DeviceKey: string.IsNullOrWhiteSpace(rawDevice) ? null : rawDevice.Trim(),
+                    Modules: modules,
+                    Group: string.IsNullOrWhiteSpace(group) ? null : group.Trim(),
+                    Note: string.IsNullOrWhiteSpace(note) ? null : note.Trim(),
+                    InsertionPoint: block.Position));
+            }
+
+            tr.Commit();
+        }
+
+        IReadOnlyList<OlsSelectedDevice> sorted = devices
+            .OrderByDescending(x => x.InsertionPoint.Y)
+            .ThenBy(x => x.InsertionPoint.X)
+            .ToList();
+        return new ParsedOlsSelection(sorted, issues);
+        // END_BLOCK_PARSE_OLS_SELECTION
+    }
+
+    private IReadOnlyList<MappedLayoutDevice> MapOlsDevices(
+        IReadOnlyList<OlsSelectedDevice> devices,
+        IReadOnlyList<PanelLayoutSelectorRule> selectorRules,
+        IReadOnlyList<PanelLayoutMapRule> legacyRules,
+        out List<SkippedOlsDeviceIssue> issues)
+    {
+        // START_BLOCK_MAP_OLS_DEVICES
+        issues = new List<SkippedOlsDeviceIssue>();
+        var result = new List<MappedLayoutDevice>(devices.Count);
+        IReadOnlyList<PanelLayoutSelectorRule> orderedSelectorRules = selectorRules
+            .Where(x => x is not null)
+            .Where(x => !string.IsNullOrWhiteSpace(x.SourceBlockName) && !string.IsNullOrWhiteSpace(x.LayoutBlockName))
+            .Select(x => new PanelLayoutSelectorRule(
+                x.Priority < 0 ? 0 : x.Priority,
+                x.SourceBlockName.Trim(),
+                string.IsNullOrWhiteSpace(x.VisibilityValue) ? null : x.VisibilityValue.Trim(),
+                x.LayoutBlockName.Trim(),
+                x.FallbackModules is > 0 ? x.FallbackModules : null))
+            .OrderBy(x => x.Priority)
+            .ThenBy(x => x.SourceBlockName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.VisibilityValue ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var legacyMap = legacyRules
+            .Where(x => !string.IsNullOrWhiteSpace(x.DeviceKey) && !string.IsNullOrWhiteSpace(x.LayoutBlockName))
+            .GroupBy(x => x.DeviceKey.Trim(), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
+
+        foreach (OlsSelectedDevice device in devices)
+        {
+            string displayLabel = ResolveDeviceLabel(device);
+            PanelLayoutSelectorRule? selectorRule = TryResolveSelectorRule(device.SourceSignature, orderedSelectorRules, out int samePriorityMatches);
+
+            string? layoutBlockName = null;
+            int? fallbackModules = null;
+            if (selectorRule is not null)
+            {
+                layoutBlockName = selectorRule.LayoutBlockName;
+                fallbackModules = selectorRule.FallbackModules;
+                if (samePriorityMatches > 1)
+                {
+                    _log.Write($"EOM_КОМПОНОВКА_ЩИТА: SOURCE='{FormatSourceSignature(device.SourceSignature)}' совпадает с несколькими правилами Priority={selectorRule.Priority}. Применено первое правило.");
+                }
+            }
+            else if (!string.IsNullOrWhiteSpace(device.DeviceKey) && legacyMap.TryGetValue(device.DeviceKey.Trim(), out PanelLayoutMapRule? legacyRule))
+            {
+                layoutBlockName = legacyRule.LayoutBlockName.Trim();
+                fallbackModules = legacyRule.FallbackModules;
+            }
+
+            if (selectorRule is not null &&
+                !fallbackModules.HasValue &&
+                !string.IsNullOrWhiteSpace(device.DeviceKey) &&
+                legacyMap.TryGetValue(device.DeviceKey.Trim(), out PanelLayoutMapRule? legacyForModules))
+            {
+                fallbackModules = legacyForModules.FallbackModules;
+            }
+
+            if (string.IsNullOrWhiteSpace(layoutBlockName))
+            {
+                if (string.IsNullOrWhiteSpace(device.DeviceKey) && device.Modules <= 0)
+                {
+                    continue;
+                }
+
+                issues.Add(new SkippedOlsDeviceIssue(
+                    device.EntityId,
+                    $"Нет правила PanelLayoutMap.json для SOURCE='{FormatSourceSignature(device.SourceSignature)}' (и fallback по АППАРАТ не найден).",
+                    device.DeviceKey,
+                    device.SourceBlockName));
+                continue;
+            }
+
+            int resolvedModules = ResolveModuleCount(device.Modules, fallbackModules);
+            if (resolvedModules <= 0)
+            {
+                issues.Add(new SkippedOlsDeviceIssue(
+                    device.EntityId,
+                    $"Отсутствует корректный атрибут {PluginConfig.PanelLayout.ModulesTag} и в правиле нет FallbackModules.",
+                    device.DeviceKey,
+                    device.SourceBlockName));
+                continue;
+            }
+
+            result.Add(new MappedLayoutDevice(
+                EntityId: device.EntityId,
+                SourceBlockName: device.SourceBlockName,
+                DeviceKey: device.DeviceKey,
+                DisplayLabel: displayLabel,
+                LayoutBlockName: layoutBlockName.Trim(),
+                Modules: resolvedModules,
+                Group: device.Group,
+                Note: device.Note));
+        }
+
+        return result;
+        // END_BLOCK_MAP_OLS_DEVICES
+    }
+
+    private static int ResolveModuleCount(int modulesFromAttribute, int? fallbackModules)
+    {
+        // START_BLOCK_RESOLVE_MODULE_COUNT
+        if (modulesFromAttribute > 0)
+        {
+            return modulesFromAttribute;
+        }
+
+        return fallbackModules is > 0 ? fallbackModules.Value : 0;
+        // END_BLOCK_RESOLVE_MODULE_COUNT
+    }
+
+    private static string ResolveDeviceLabel(OlsSelectedDevice device)
+    {
+        // START_BLOCK_RESOLVE_DEVICE_LABEL
+        if (!string.IsNullOrWhiteSpace(device.DeviceKey))
+        {
+            return device.DeviceKey.Trim();
+        }
+
+        return FormatSourceSignature(device.SourceSignature);
+        // END_BLOCK_RESOLVE_DEVICE_LABEL
+    }
+
+    private static PanelLayoutSelectorRule? TryResolveSelectorRule(
+        OlsSourceSignature signature,
+        IReadOnlyList<PanelLayoutSelectorRule> rules,
+        out int samePriorityMatches)
+    {
+        // START_BLOCK_TRY_RESOLVE_SELECTOR_RULE
+        samePriorityMatches = 0;
+        PanelLayoutSelectorRule? selected = null;
+        int bestPriority = int.MaxValue;
+        int bestSpecificity = -1;
+
+        foreach (PanelLayoutSelectorRule rule in rules)
+        {
+            if (!IsSelectorRuleMatch(rule, signature))
+            {
+                continue;
+            }
+
+            int specificity = GetSelectorRuleSpecificity(rule);
+            if (selected is null)
+            {
+                selected = rule;
+                bestPriority = rule.Priority;
+                bestSpecificity = specificity;
+                samePriorityMatches = 1;
+                continue;
+            }
+
+            if (rule.Priority < bestPriority ||
+                (rule.Priority == bestPriority && specificity > bestSpecificity))
+            {
+                selected = rule;
+                bestPriority = rule.Priority;
+                bestSpecificity = specificity;
+                samePriorityMatches = 1;
+                continue;
+            }
+
+            if (rule.Priority == bestPriority && specificity == bestSpecificity)
+            {
+                samePriorityMatches++;
+            }
+        }
+
+        return selected;
+        // END_BLOCK_TRY_RESOLVE_SELECTOR_RULE
+    }
+
+    private static int GetSelectorRuleSpecificity(PanelLayoutSelectorRule rule)
+    {
+        // START_BLOCK_GET_SELECTOR_RULE_SPECIFICITY
+        return string.IsNullOrWhiteSpace(rule.VisibilityValue) ? 0 : 1;
+        // END_BLOCK_GET_SELECTOR_RULE_SPECIFICITY
+    }
+
+    private static bool IsSelectorRuleMatch(PanelLayoutSelectorRule rule, OlsSourceSignature signature)
+    {
+        // START_BLOCK_IS_SELECTOR_RULE_MATCH
+        if (!string.Equals(rule.SourceBlockName, signature.SourceBlockName, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(rule.VisibilityValue))
+        {
+            return true;
+        }
+
+        return string.Equals(rule.VisibilityValue, signature.VisibilityValue, StringComparison.OrdinalIgnoreCase);
+        // END_BLOCK_IS_SELECTOR_RULE_MATCH
+    }
+
+    private static string FormatSourceSignature(OlsSourceSignature signature)
+    {
+        // START_BLOCK_FORMAT_SOURCE_SIGNATURE
+        if (string.IsNullOrWhiteSpace(signature.VisibilityValue))
+        {
+            return $"{signature.SourceBlockName}|*";
+        }
+
+        return $"{signature.SourceBlockName}|{signature.VisibilityValue}";
+        // END_BLOCK_FORMAT_SOURCE_SIGNATURE
+    }
+
+    // START_CONTRACT: BuildPanelLayoutModel
+    //   PURPOSE: Build split-aware DIN row placement model for EOM_КОМПОНОВКА_ЩИТА from mapped OLS devices.
+    //   INPUTS: { devices: IReadOnlyList<MappedLayoutDevice> - mapped OLS devices, modulesPerRow: int - requested modules in one DIN row }
+    //   OUTPUTS: { IReadOnlyList<PanelLayoutRow> - normalized placements with row/slot coordinates and split metadata }
+    // END_CONTRACT: BuildPanelLayoutModel
+    private static IReadOnlyList<PanelLayoutRow> BuildPanelLayoutModel(IReadOnlyList<MappedLayoutDevice> devices, int modulesPerRow)
+    {
+        // START_BLOCK_BUILD_PANEL_LAYOUT_MODEL
+        if (devices.Count == 0)
+        {
+            return [];
         }
 
         int safeModulesPerRow = modulesPerRow <= 0 ? 24 : modulesPerRow;
-        const double moduleWidth = 5.0;
-        const double moduleHeight = 4.0;
-        const double rowGap = 2.0;
+        var result = new List<PanelLayoutRow>(devices.Count);
+        int dinRow = 1;
+        int occupiedInRow = 0;
+
+        foreach (MappedLayoutDevice device in devices)
+        {
+            int totalModules = NormalizeModuleCount(device.Modules);
+            int remainingModules = totalModules;
+            int segmentCount = CountSegmentsForDevice(totalModules, occupiedInRow, safeModulesPerRow);
+            int segmentIndex = 1;
+
+            while (remainingModules > 0)
+            {
+                if (occupiedInRow >= safeModulesPerRow)
+                {
+                    dinRow++;
+                    occupiedInRow = 0;
+                }
+
+                int freeSlots = safeModulesPerRow - occupiedInRow;
+                int modulesInSegment = Math.Min(remainingModules, freeSlots);
+                int slotStart = occupiedInRow + 1;
+                int slotEnd = slotStart + modulesInSegment - 1;
+
+                result.Add(new PanelLayoutRow(
+                    EntityId: device.EntityId,
+                    DinRow: dinRow,
+                    SlotStart: slotStart,
+                    SlotEnd: slotEnd,
+                    LayoutBlockName: device.LayoutBlockName,
+                    DeviceKey: device.DisplayLabel,
+                    SourceBlockName: device.SourceBlockName,
+                    ModuleCount: modulesInSegment,
+                    SegmentIndex: segmentIndex,
+                    SegmentCount: segmentCount,
+                    Group: device.Group,
+                    Note: device.Note));
+
+                occupiedInRow += modulesInSegment;
+                remainingModules -= modulesInSegment;
+                segmentIndex++;
+            }
+        }
+
+        return result;
+        // END_BLOCK_BUILD_PANEL_LAYOUT_MODEL
+    }
+
+    private static int NormalizeModuleCount(int rawModuleCount)
+    {
+        // START_BLOCK_NORMALIZE_MODULE_COUNT
+        return rawModuleCount <= 0 ? 1 : rawModuleCount;
+        // END_BLOCK_NORMALIZE_MODULE_COUNT
+    }
+
+    private static int CountSegmentsForDevice(int totalModules, int occupiedInRow, int modulesPerRow)
+    {
+        // START_BLOCK_COUNT_SEGMENTS_FOR_DEVICE
+        int remaining = totalModules;
+        int occupied = occupiedInRow;
+        int segments = 0;
+        while (remaining > 0)
+        {
+            if (occupied >= modulesPerRow)
+            {
+                occupied = 0;
+            }
+
+            int freeSlots = modulesPerRow - occupied;
+            int chunk = Math.Min(remaining, freeSlots);
+            remaining -= chunk;
+            occupied += chunk;
+            segments++;
+        }
+
+        return Math.Max(1, segments);
+        // END_BLOCK_COUNT_SEGMENTS_FOR_DEVICE
+    }
+
+    private static int DrawPanelLayout(
+        IReadOnlyList<PanelLayoutRow> layoutRows,
+        Point3d basePoint,
+        int modulesPerRow,
+        out List<SkippedOlsDeviceIssue> issues)
+    {
+        // START_BLOCK_DRAW_PANEL_LAYOUT_MODEL
+        issues = new List<SkippedOlsDeviceIssue>();
+        Document? doc = Application.DocumentManager.MdiActiveDocument;
+        if (doc is null || layoutRows.Count == 0)
+        {
+            return 0;
+        }
+
+        int safeModulesPerRow = modulesPerRow <= 0 ? 24 : modulesPerRow;
+        const double moduleWidth = 8.0;
+        const double moduleHeight = 6.0;
+        const double rowGap = 3.0;
+        int renderedSegments = 0;
 
         using (doc.LockDocument())
         using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
@@ -726,99 +1554,491 @@ public class CommandRegistry
             BlockTable bt = (BlockTable)tr.GetObject(doc.Database.BlockTableId, OpenMode.ForRead);
             BlockTableRecord ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
 
-            double currentX = basePoint.X;
-            double currentY = basePoint.Y;
-            int occupiedInRow = 0;
-
-            foreach (IGrouping<string, ExcelOutputRow> shieldGroup in rows
-                .OrderBy(x => x.Shield)
-                .ThenBy(x => x.Group)
-                .GroupBy(x => x.Shield, StringComparer.OrdinalIgnoreCase))
+            int maxDinRow = layoutRows.Max(x => x.DinRow);
+            for (int dinRow = 1; dinRow <= maxDinRow; dinRow++)
             {
-                occupiedInRow = 0;
-                currentX = basePoint.X;
-                currentY -= 8.0;
+                double rowTop = basePoint.Y - ((dinRow - 1) * (moduleHeight + rowGap));
+                DrawPanelLayoutRowFrame(ms, tr, basePoint.X, rowTop, basePoint.Z, safeModulesPerRow, moduleWidth, moduleHeight, dinRow);
+            }
 
-                var shieldTitle = new DBText
+            foreach (PanelLayoutRow row in layoutRows.OrderBy(x => x.DinRow).ThenBy(x => x.SlotStart))
+            {
+                double rowTop = basePoint.Y - ((row.DinRow - 1) * (moduleHeight + rowGap));
+                double leftX = basePoint.X + ((row.SlotStart - 1) * moduleWidth);
+                bool drawn = DrawPanelLayoutDevice(ms, tr, bt, row, leftX, rowTop, basePoint.Z, moduleWidth, moduleHeight);
+                if (!drawn)
                 {
-                    Position = new Point3d(currentX, currentY + 3.5, basePoint.Z),
-                    Height = 2.8,
-                    TextString = $"{PluginConfig.Strings.Shield}: {shieldGroup.Key}",
-                    Layer = "0"
-                };
-                ms.AppendEntity(shieldTitle);
-                tr.AddNewlyCreatedDBObject(shieldTitle, true);
-
-                var inputDevice = new LayoutDevice("\u0412\u0412\u041e\u0414", 2);
-                PlaceLayoutDevice(ms, tr, inputDevice, basePoint.Z, basePoint.X, ref currentX, ref currentY, ref occupiedInRow, safeModulesPerRow, moduleWidth, moduleHeight, rowGap);
-
-                foreach (ExcelOutputRow row in shieldGroup)
-                {
-                    if (row.RcdModules > 0)
-                    {
-                        var rcdDevice = new LayoutDevice($"{row.Group}: {row.RcdDiff}", Math.Max(1, row.RcdModules));
-                        PlaceLayoutDevice(ms, tr, rcdDevice, basePoint.Z, basePoint.X, ref currentX, ref currentY, ref occupiedInRow, safeModulesPerRow, moduleWidth, moduleHeight, rowGap);
-                    }
-
-                    var breakerDevice = new LayoutDevice($"{row.Group}: {row.CircuitBreaker}", Math.Max(1, row.CircuitBreakerModules));
-                    PlaceLayoutDevice(ms, tr, breakerDevice, basePoint.Z, basePoint.X, ref currentX, ref currentY, ref occupiedInRow, safeModulesPerRow, moduleWidth, moduleHeight, rowGap);
+                    issues.Add(new SkippedOlsDeviceIssue(
+                        row.EntityId,
+                        $"В чертеже отсутствует блок визуализации '{row.LayoutBlockName}'.",
+                        row.DeviceKey,
+                        row.SourceBlockName));
+                    continue;
                 }
 
-                currentY -= moduleHeight + rowGap + 8.0;
+                renderedSegments++;
             }
 
             tr.Commit();
         }
-        // END_BLOCK_DRAW_PANEL_LAYOUT
+
+        return renderedSegments;
+        // END_BLOCK_DRAW_PANEL_LAYOUT_MODEL
     }
 
-    private static void PlaceLayoutDevice(
+    private static void DrawPanelLayoutRowFrame(
         BlockTableRecord ms,
         Transaction tr,
-        LayoutDevice device,
-        double z,
         double rowStartX,
-        ref double currentX,
-        ref double currentY,
-        ref int occupiedInRow,
+        double rowTopY,
+        double z,
         int modulesPerRow,
         double moduleWidth,
         double moduleHeight,
-        double rowGap)
+        int dinRow)
     {
-        // START_BLOCK_PLACE_LAYOUT_DEVICE
-        if (occupiedInRow + device.ModuleCount > modulesPerRow)
+        // START_BLOCK_DRAW_PANEL_LAYOUT_ROW_FRAME
+        DrawRectangle(ms, tr, rowStartX, rowTopY, moduleWidth * modulesPerRow, moduleHeight);
+
+        var rowLabel = new DBText
         {
-            occupiedInRow = 0;
-            currentX = rowStartX;
-            currentY -= moduleHeight + rowGap + 4.0;
+            Position = new Point3d(rowStartX - 12.0, rowTopY - (moduleHeight / 2.0), z),
+            Height = 2.0,
+            TextString = $"Ряд {dinRow}",
+            Layer = "0"
+        };
+        ms.AppendEntity(rowLabel);
+        tr.AddNewlyCreatedDBObject(rowLabel, true);
+        // END_BLOCK_DRAW_PANEL_LAYOUT_ROW_FRAME
+    }
+
+    private static bool DrawPanelLayoutDevice(
+        BlockTableRecord ms,
+        Transaction tr,
+        BlockTable bt,
+        PanelLayoutRow row,
+        double leftX,
+        double topY,
+        double z,
+        double moduleWidth,
+        double moduleHeight)
+    {
+        // START_BLOCK_DRAW_PANEL_LAYOUT_DEVICE
+        if (!bt.Has(row.LayoutBlockName))
+        {
+            return false;
         }
 
-        var frame = new Polyline();
-        frame.AddVertexAt(0, new Point2d(currentX, currentY), 0, 0, 0);
-        frame.AddVertexAt(1, new Point2d(currentX + moduleWidth * device.ModuleCount, currentY), 0, 0, 0);
-        frame.AddVertexAt(2, new Point2d(currentX + moduleWidth * device.ModuleCount, currentY - moduleHeight), 0, 0, 0);
-        frame.AddVertexAt(3, new Point2d(currentX, currentY - moduleHeight), 0, 0, 0);
-        frame.Closed = true;
-        ms.AppendEntity(frame);
-        tr.AddNewlyCreatedDBObject(frame, true);
+        double width = moduleWidth * row.ModuleCount;
+        DrawRectangle(ms, tr, leftX, topY, width, moduleHeight);
+        if (!TryInsertLayoutBlockFitted(ms, tr, bt, row.LayoutBlockName, leftX, topY, z, width, moduleHeight))
+        {
+            return false;
+        }
 
+        string segmentSuffix = row.SegmentCount > 1
+            ? $" ({row.SegmentIndex}/{row.SegmentCount})"
+            : string.Empty;
+        string groupPrefix = string.IsNullOrWhiteSpace(row.Group) ? string.Empty : $"{row.Group}: ";
         var label = new DBText
         {
-            Position = new Point3d(currentX, currentY + 1.0, z),
-            Height = 2.0,
-            TextString = $"{device.Label} [{device.ModuleCount}]",
+            Position = new Point3d(leftX + 0.5, topY - moduleHeight - 1.8, z),
+            Height = 1.8,
+            TextString = $"{groupPrefix}{row.DeviceKey}{segmentSuffix} [{row.ModuleCount}]",
             Layer = "0"
         };
         ms.AppendEntity(label);
         tr.AddNewlyCreatedDBObject(label, true);
-
-        currentX += moduleWidth * device.ModuleCount;
-        occupiedInRow += device.ModuleCount;
-        // END_BLOCK_PLACE_LAYOUT_DEVICE
+        return true;
+        // END_BLOCK_DRAW_PANEL_LAYOUT_DEVICE
     }
 
-    private sealed record LayoutDevice(string Label, int ModuleCount);
+    private static bool TryInsertLayoutBlockFitted(
+        BlockTableRecord ms,
+        Transaction tr,
+        BlockTable bt,
+        string blockName,
+        double leftX,
+        double topY,
+        double z,
+        double targetWidth,
+        double targetHeight)
+    {
+        // START_BLOCK_TRY_INSERT_LAYOUT_BLOCK_FITTED
+        if (!bt.Has(blockName))
+        {
+            return false;
+        }
+
+        ObjectId blockId = bt[blockName];
+        if (tr.GetObject(blockId, OpenMode.ForRead) is not BlockTableRecord btr)
+        {
+            return false;
+        }
+
+        if (!TryGetBlockDefinitionExtents(tr, btr, out Point3d sourceMin, out Point3d sourceMax))
+        {
+            var fallbackRef = new BlockReference(
+                new Point3d(leftX + (targetWidth / 2.0), topY - (targetHeight / 2.0), z),
+                blockId);
+            ms.AppendEntity(fallbackRef);
+            tr.AddNewlyCreatedDBObject(fallbackRef, true);
+            return true;
+        }
+
+        double sourceWidth = Math.Max(0.001, sourceMax.X - sourceMin.X);
+        double scale = 1.0;
+        // Keep legacy visual size (scale=1) and only shrink if block is wider than slot.
+        if (sourceWidth > targetWidth && targetWidth > 0.0)
+        {
+            scale = targetWidth / sourceWidth;
+        }
+
+        Point3d sourceCenter = new(
+            (sourceMin.X + sourceMax.X) / 2.0,
+            (sourceMin.Y + sourceMax.Y) / 2.0,
+            (sourceMin.Z + sourceMax.Z) / 2.0);
+        Point3d targetCenter = new(leftX + (targetWidth / 2.0), topY - (targetHeight / 2.0), z);
+        Point3d insertionPoint = new(
+            targetCenter.X - (sourceCenter.X * scale),
+            targetCenter.Y - (sourceCenter.Y * scale),
+            targetCenter.Z - (sourceCenter.Z * scale));
+
+        var blockRef = new BlockReference(insertionPoint, blockId)
+        {
+            ScaleFactors = new Scale3d(scale)
+        };
+        ms.AppendEntity(blockRef);
+        tr.AddNewlyCreatedDBObject(blockRef, true);
+        return true;
+        // END_BLOCK_TRY_INSERT_LAYOUT_BLOCK_FITTED
+    }
+
+    private static bool TryGetBlockDefinitionExtents(
+        Transaction tr,
+        BlockTableRecord btr,
+        out Point3d minPoint,
+        out Point3d maxPoint)
+    {
+        // START_BLOCK_TRY_GET_BLOCK_DEFINITION_EXTENTS
+        minPoint = Point3d.Origin;
+        maxPoint = Point3d.Origin;
+
+        bool hasExtents = false;
+        double minX = double.MaxValue;
+        double minY = double.MaxValue;
+        double minZ = double.MaxValue;
+        double maxX = double.MinValue;
+        double maxY = double.MinValue;
+        double maxZ = double.MinValue;
+
+        foreach (ObjectId id in btr)
+        {
+            if (tr.GetObject(id, OpenMode.ForRead) is not Entity entity)
+            {
+                continue;
+            }
+
+            Extents3d extents;
+            try
+            {
+                extents = entity.GeometricExtents;
+            }
+            catch
+            {
+                continue;
+            }
+
+            hasExtents = true;
+            minX = Math.Min(minX, extents.MinPoint.X);
+            minY = Math.Min(minY, extents.MinPoint.Y);
+            minZ = Math.Min(minZ, extents.MinPoint.Z);
+            maxX = Math.Max(maxX, extents.MaxPoint.X);
+            maxY = Math.Max(maxY, extents.MaxPoint.Y);
+            maxZ = Math.Max(maxZ, extents.MaxPoint.Z);
+        }
+
+        if (!hasExtents)
+        {
+            return false;
+        }
+
+        minPoint = new Point3d(minX, minY, minZ);
+        maxPoint = new Point3d(maxX, maxY, maxZ);
+        return true;
+        // END_BLOCK_TRY_GET_BLOCK_DEFINITION_EXTENTS
+    }
+
+    private static void DrawRectangle(BlockTableRecord ms, Transaction tr, double leftX, double topY, double width, double height)
+    {
+        // START_BLOCK_DRAW_RECTANGLE_ENTITY
+        var frame = new Polyline();
+        frame.AddVertexAt(0, new Point2d(leftX, topY), 0, 0, 0);
+        frame.AddVertexAt(1, new Point2d(leftX + width, topY), 0, 0, 0);
+        frame.AddVertexAt(2, new Point2d(leftX + width, topY - height), 0, 0, 0);
+        frame.AddVertexAt(3, new Point2d(leftX, topY - height), 0, 0, 0);
+        frame.Closed = true;
+        ms.AppendEntity(frame);
+        tr.AddNewlyCreatedDBObject(frame, true);
+        // END_BLOCK_DRAW_RECTANGLE_ENTITY
+    }
+
+    private static string ResolveBlockName(Transaction tr, BlockReference block)
+    {
+        // START_BLOCK_RESOLVE_BLOCK_NAME
+        if (tr.GetObject(block.BlockTableRecord, OpenMode.ForRead) is BlockTableRecord btr)
+        {
+            return btr.Name ?? string.Empty;
+        }
+
+        return string.Empty;
+        // END_BLOCK_RESOLVE_BLOCK_NAME
+    }
+
+    private static string ResolveEffectiveBlockName(Transaction tr, BlockReference block)
+    {
+        // START_BLOCK_RESOLVE_EFFECTIVE_BLOCK_NAME
+        if (block.IsDynamicBlock && !block.DynamicBlockTableRecord.IsNull)
+        {
+            if (tr.GetObject(block.DynamicBlockTableRecord, OpenMode.ForRead) is BlockTableRecord dynamicBtr &&
+                !string.IsNullOrWhiteSpace(dynamicBtr.Name) &&
+                !IsAnonymousBlockName(dynamicBtr.Name))
+            {
+                return dynamicBtr.Name.Trim();
+            }
+        }
+
+        string rawName = ResolveBlockName(tr, block);
+        if (!string.IsNullOrWhiteSpace(rawName) && !IsAnonymousBlockName(rawName))
+        {
+            return rawName.Trim();
+        }
+
+        string? ownerName = TryResolveOwnerDynamicBlockName(tr, block);
+        if (!string.IsNullOrWhiteSpace(ownerName))
+        {
+            return ownerName.Trim();
+        }
+
+        return rawName;
+        // END_BLOCK_RESOLVE_EFFECTIVE_BLOCK_NAME
+    }
+
+    private static string? TryResolveOwnerDynamicBlockName(Transaction tr, BlockReference block)
+    {
+        // START_BLOCK_TRY_RESOLVE_OWNER_DYNAMIC_BLOCK_NAME
+        Database? db = block.Database;
+        if (db is null || block.BlockTableRecord.IsNull)
+        {
+            return null;
+        }
+
+        BlockTable bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+        foreach (ObjectId candidateId in bt)
+        {
+            if (tr.GetObject(candidateId, OpenMode.ForRead) is not BlockTableRecord candidate)
+            {
+                continue;
+            }
+
+            if (candidate.IsAnonymous || string.IsNullOrWhiteSpace(candidate.Name))
+            {
+                continue;
+            }
+
+            ObjectIdCollection anonymousIds;
+            try
+            {
+                anonymousIds = candidate.GetAnonymousBlockIds();
+            }
+            catch
+            {
+                continue;
+            }
+
+            foreach (ObjectId anonId in anonymousIds)
+            {
+                if (anonId == block.BlockTableRecord)
+                {
+                    return candidate.Name.Trim();
+                }
+            }
+        }
+
+        return null;
+        // END_BLOCK_TRY_RESOLVE_OWNER_DYNAMIC_BLOCK_NAME
+    }
+
+    private static bool IsAnonymousBlockName(string? name)
+    {
+        // START_BLOCK_IS_ANONYMOUS_BLOCK_NAME
+        return !string.IsNullOrWhiteSpace(name) && name.StartsWith("*", StringComparison.Ordinal);
+        // END_BLOCK_IS_ANONYMOUS_BLOCK_NAME
+    }
+
+    private static string? ResolveVisibilityValue(BlockReference block)
+    {
+        // START_BLOCK_RESOLVE_VISIBILITY_VALUE
+        if (!block.IsDynamicBlock)
+        {
+            return null;
+        }
+
+        try
+        {
+            DynamicBlockReferencePropertyCollection properties = block.DynamicBlockReferencePropertyCollection;
+            foreach (DynamicBlockReferenceProperty property in properties)
+            {
+                if (!IsVisibilityLikeProperty(property.PropertyName))
+                {
+                    continue;
+                }
+
+                string? value = property.Value?.ToString();
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    return value.Trim();
+                }
+            }
+        }
+        catch
+        {
+            return null;
+        }
+
+        return null;
+        // END_BLOCK_RESOLVE_VISIBILITY_VALUE
+    }
+
+    private static bool IsVisibilityLikeProperty(string? propertyName)
+    {
+        // START_BLOCK_IS_VISIBILITY_LIKE_PROPERTY
+        if (string.IsNullOrWhiteSpace(propertyName))
+        {
+            return false;
+        }
+
+        return propertyName.Contains("visibility", StringComparison.OrdinalIgnoreCase)
+            || propertyName.Contains("видим", StringComparison.OrdinalIgnoreCase)
+            || propertyName.Contains("lookup", StringComparison.OrdinalIgnoreCase)
+            || propertyName.Contains("таблиц", StringComparison.OrdinalIgnoreCase);
+        // END_BLOCK_IS_VISIBILITY_LIKE_PROPERTY
+    }
+
+    private static bool TryReadSourceSignature(Document doc, ObjectId objectId, out OlsSourceSignature signature)
+    {
+        // START_BLOCK_TRY_READ_SOURCE_SIGNATURE
+        signature = new OlsSourceSignature(string.Empty, null);
+        using (doc.LockDocument())
+        using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
+        {
+            if (tr.GetObject(objectId, OpenMode.ForRead) is not BlockReference block)
+            {
+                return false;
+            }
+
+            string sourceBlockName = ResolveEffectiveBlockName(tr, block);
+            if (string.IsNullOrWhiteSpace(sourceBlockName))
+            {
+                return false;
+            }
+
+            signature = new OlsSourceSignature(sourceBlockName, ResolveVisibilityValue(block));
+            tr.Commit();
+            return true;
+        }
+        // END_BLOCK_TRY_READ_SOURCE_SIGNATURE
+    }
+
+    private static bool TryReadEffectiveBlockName(Document doc, ObjectId objectId, out string blockName)
+    {
+        // START_BLOCK_TRY_READ_EFFECTIVE_BLOCK_NAME
+        blockName = string.Empty;
+        using (doc.LockDocument())
+        using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
+        {
+            if (tr.GetObject(objectId, OpenMode.ForRead) is not BlockReference block)
+            {
+                return false;
+            }
+
+            blockName = ResolveEffectiveBlockName(tr, block);
+            if (string.IsNullOrWhiteSpace(blockName))
+            {
+                return false;
+            }
+
+            tr.Commit();
+            return true;
+        }
+        // END_BLOCK_TRY_READ_EFFECTIVE_BLOCK_NAME
+    }
+
+    private static bool TryParsePositiveInt(string? raw, out int value)
+    {
+        // START_BLOCK_TRY_PARSE_POSITIVE_INT
+        value = 0;
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return false;
+        }
+
+        if (!int.TryParse(raw.Trim(), out int parsed))
+        {
+            return false;
+        }
+
+        if (parsed <= 0)
+        {
+            return false;
+        }
+
+        value = parsed;
+        return true;
+        // END_BLOCK_TRY_PARSE_POSITIVE_INT
+    }
+
+    private void ReportSkippedOlsDevices(IReadOnlyList<SkippedOlsDeviceIssue> issues)
+    {
+        // START_BLOCK_REPORT_SKIPPED_OLS_DEVICES
+        if (issues.Count == 0)
+        {
+            return;
+        }
+
+        _log.Write($"EOM_КОМПОНОВКА_ЩИТА: пропущено объектов: {issues.Count}.");
+        foreach (SkippedOlsDeviceIssue issue in issues)
+        {
+            string blockNamePart = string.IsNullOrWhiteSpace(issue.SourceBlockName) ? string.Empty : $" BLOCK={issue.SourceBlockName};";
+            string deviceKeyPart = string.IsNullOrWhiteSpace(issue.DeviceKey) ? string.Empty : $" АППАРАТ={issue.DeviceKey};";
+            _log.Write($"  - ID={issue.EntityId};{blockNamePart}{deviceKeyPart} Причина: {issue.Reason}");
+        }
+        // END_BLOCK_REPORT_SKIPPED_OLS_DEVICES
+    }
+
+    private sealed record ParsedOlsSelection(IReadOnlyList<OlsSelectedDevice> Devices, IReadOnlyList<SkippedOlsDeviceIssue> Issues);
+    private sealed record MappedLayoutDevice(
+        ObjectId EntityId,
+        string SourceBlockName,
+        string? DeviceKey,
+        string DisplayLabel,
+        string LayoutBlockName,
+        int Modules,
+        string? Group,
+        string? Note);
+    private sealed record PanelLayoutRow(
+        ObjectId EntityId,
+        int DinRow,
+        int SlotStart,
+        int SlotEnd,
+        string LayoutBlockName,
+        string DeviceKey,
+        string SourceBlockName,
+        int ModuleCount,
+        int SegmentIndex,
+        int SegmentCount,
+        string? Group,
+        string? Note);
 
     private static void InsertTemplateOrFallback(Transaction tr, BlockTable bt, BlockTableRecord ms, string blockName, Point3d position, string fallbackLabel)
     {
@@ -842,6 +2062,54 @@ public class CommandRegistry
         ms.AppendEntity(fallback);
         tr.AddNewlyCreatedDBObject(fallback, true);
         // END_BLOCK_INSERT_TEMPLATE_OR_FALLBACK
+    }
+
+    private static void EnsureRegApp(Transaction tr, Database db, string appName)
+    {
+        // START_BLOCK_ENSURE_REGAPP_INLINE
+        RegAppTable regAppTable = (RegAppTable)tr.GetObject(db.RegAppTableId, OpenMode.ForRead);
+        if (regAppTable.Has(appName))
+        {
+            return;
+        }
+
+        regAppTable.UpgradeOpen();
+        var record = new RegAppTableRecord { Name = appName };
+        regAppTable.Add(record);
+        tr.AddNewlyCreatedDBObject(record, true);
+        // END_BLOCK_ENSURE_REGAPP_INLINE
+    }
+
+    private static void UpsertEntityXData(Entity entity, string appName, IReadOnlyList<TypedValue> appPayload)
+    {
+        // START_BLOCK_UPSERT_ENTITY_XDATA
+        List<TypedValue> allValues = entity.XData?.AsArray().ToList() ?? [];
+        var merged = new List<TypedValue>();
+        bool skipCurrentAppPayload = false;
+        foreach (TypedValue value in allValues)
+        {
+            if (value.TypeCode == (int)DxfCode.ExtendedDataRegAppName)
+            {
+                string currentApp = value.Value?.ToString() ?? string.Empty;
+                skipCurrentAppPayload = string.Equals(currentApp, appName, StringComparison.OrdinalIgnoreCase);
+                if (!skipCurrentAppPayload)
+                {
+                    merged.Add(value);
+                }
+
+                continue;
+            }
+
+            if (!skipCurrentAppPayload)
+            {
+                merged.Add(value);
+            }
+        }
+
+        merged.Add(new TypedValue((int)DxfCode.ExtendedDataRegAppName, appName));
+        merged.AddRange(appPayload);
+        entity.XData = new ResultBuffer(merged.ToArray());
+        // END_BLOCK_UPSERT_ENTITY_XDATA
     }
 
     private static void SelectIssueEntity(Editor editor, ValidationIssue issue)

@@ -1,384 +1,624 @@
-﻿<DevelopmentPlan VERSION="0.1.0">
+﻿<DevelopmentPlan VERSION="0.4.0">
+  <Constraints>
+    <ARCH-1>Keep existing 16-module architecture and orchestrator boundaries unchanged.</ARCH-1>
+    <ARCH-2>Keep DF-MAP-01, DF-TRACE-01, DF-SPEC-01 identifiers and preserve Phase-1..Phase-6.</ARCH-2>
+    <ARCH-3>Support AutoCAD 2021+ with C# .NET plugin compatibility constraints.</ARCH-3>
+    <ARCH-4>Use Russian attribute and user-field names in DWG and validation outputs.</ARCH-4>
+  </Constraints>
   <Modules>
-    <M-ACAD NAME="AutoCADAdapter" TYPE="INTEGRATION" LAYER="0" ORDER="1">
+    <M-CONFIG NAME="PluginConfig" TYPE="UTILITY" LAYER="0" ORDER="1">
       <contract>
-        <purpose>Provide safe access to AutoCAD document, editor, database, transactions, and coordinate conversions.</purpose>
+        <purpose>Define shared constants for XData keys, Russian attribute names, command names, install-type rules, and Excel template contracts.</purpose>
         <inputs>
-          <param name="request" type="AutoCAD context" />
+          <param name="none" type="none" />
         </inputs>
         <outputs>
-          <param name="result" type="AutoCAD primitives" />
+          <param name="config" type="constants and schema descriptors" />
         </outputs>
         <errors>
-          <error code="ACAD_CONTEXT_UNAVAILABLE" />
+          <error code="CONFIG_INVALID" />
         </errors>
       </contract>
       <interface>
-        <export-getActiveDocument PURPOSE="Get active AutoCAD document" />
-        <export-runTransaction PURPOSE="Execute action in transaction" />
-        <export-ucsToWcs PURPOSE="Convert geometry from UCS to WCS" />
+        <export-getConstants PURPOSE="Get canonical plugin constants" />
+        <export-getAttributeContract PURPOSE="Get required/optional Russian attribute names" />
+        <export-getInstallTypeRuleSchema PURPOSE="Get JSON schema for install-type resolver rules" />
+        <export-getExcelTemplateContract PURPOSE="Get INPUT/OUTPUT sheet and column contract" />
       </interface>
       <depends>none</depends>
-    </M-ACAD>
-
-    <M-JSON NAME="JsonAdapter" TYPE="INTEGRATION" LAYER="0" ORDER="2">
+    </M-CONFIG>
+    <M-CAD-CONTEXT NAME="CadContextAdapter" TYPE="INTEGRATION" LAYER="0" ORDER="2">
       <contract>
-        <purpose>Serialize and deserialize plugin settings using Newtonsoft.Json.</purpose>
+        <purpose>Provide unified access to AutoCAD document, database, editor, transactions, and object-created subscriptions for runtime group assignment.</purpose>
         <inputs>
-          <param name="payload" type="object|string" />
+          <param name="request" type="AutoCAD context request" />
         </inputs>
         <outputs>
-          <param name="json-or-model" type="string|object" />
+          <param name="context" type="document/database/editor/transaction helpers" />
         </outputs>
         <errors>
-          <error code="JSON_PARSE_ERROR" />
+          <error code="CAD_CONTEXT_UNAVAILABLE" />
         </errors>
       </contract>
       <interface>
-        <export-serialize PURPOSE="Serialize object to JSON" />
-        <export-deserialize PURPOSE="Deserialize JSON to typed model" />
+        <export-getActiveContext PURPOSE="Get active AutoCAD context" />
+        <export-runTransaction PURPOSE="Execute operation in transaction" />
+        <export-subscribeObjectAppended PURPOSE="Subscribe to new entity creation in current document" />
+        <export-resolveLinetype PURPOSE="Resolve effective linetype including ByLayer" />
       </interface>
       <depends>none</depends>
-    </M-JSON>
-
-    <M-SYSMGMT NAME="HardwareProbeAdapter" TYPE="INTEGRATION" LAYER="0" ORDER="3">
+    </M-CAD-CONTEXT>
+    <M-LOGGING NAME="LoggingService" TYPE="UTILITY" LAYER="0" ORDER="3">
       <contract>
-        <purpose>Read hardware identifiers via System.Management for licensing.</purpose>
-        <inputs>
-          <param name="probe" type="machine request" />
-        </inputs>
-        <outputs>
-          <param name="hardware-id" type="string" />
-        </outputs>
-        <errors>
-          <error code="WMI_QUERY_FAILED" />
-        </errors>
-      </contract>
-      <interface>
-        <export-getHardwareId PURPOSE="Read stable hardware identifier" />
-      </interface>
-      <depends>none</depends>
-    </M-SYSMGMT>
-
-    <M-LOG NAME="LogService" TYPE="UTILITY" LAYER="1" ORDER="1">
-      <contract>
-        <purpose>Write operational diagnostics to AutoCAD editor and optional sinks.</purpose>
+        <purpose>Write structured diagnostics with semantic block references and validation issue reporting.</purpose>
         <inputs>
           <param name="message" type="string" />
         </inputs>
         <outputs>
-          <param name="log-record" type="diagnostic record" />
+          <param name="record" type="log record" />
         </outputs>
         <errors>
           <error code="LOG_WRITE_FAILED" />
         </errors>
       </contract>
       <interface>
-        <export-write PURPOSE="Write contextual log message" />
+        <export-info PURPOSE="Write informational log" />
+        <export-error PURPOSE="Write error log" />
+        <export-reportIssues PURPOSE="Write EOM_ПРОВЕРКА issue list with entity references" />
       </interface>
-      <depends>M-ACAD</depends>
-    </M-LOG>
-
-    <M-SETTINGS NAME="SettingsRepository" TYPE="DATA_LAYER" LAYER="1" ORDER="2">
+      <depends>M-CAD-CONTEXT</depends>
+    </M-LOGGING>
+    <M-SELECTION NAME="SelectionService" TYPE="INTEGRATION" LAYER="1" ORDER="1">
       <contract>
-        <purpose>Load and save Settings.json and plugin profiles.</purpose>
+        <purpose>Select entities and validate expected AutoCAD types for workflows, including line/polyline batches for group assignment and checks.</purpose>
         <inputs>
-          <param name="settings" type="settings model" />
+          <param name="selection request" type="typed prompt" />
         </inputs>
         <outputs>
-          <param name="settings" type="settings model" />
+          <param name="selected ids" type="ObjectId list" />
         </outputs>
         <errors>
-          <error code="SETTINGS_IO_FAILED" />
+          <error code="SELECTION_CANCELLED" />
+          <error code="ENTITY_TYPE_MISMATCH" />
         </errors>
       </contract>
       <interface>
-        <export-loadSettings PURPOSE="Load settings from file" />
-        <export-saveSettings PURPOSE="Save settings to file" />
+        <export-selectBlocks PURPOSE="Select block references by mask/filter" />
+        <export-selectPolyline PURPOSE="Select a route polyline" />
+        <export-selectCableLines PURPOSE="Select line/polyline entities for group assignment" />
+        <export-selectByIssue PURPOSE="Select and focus entity from validation issue" />
       </interface>
-      <depends>M-JSON, M-LOG</depends>
+      <depends>M-CAD-CONTEXT</depends>
+    </M-SELECTION>
+    <M-SETTINGS NAME="MappingSettingsRepository" TYPE="DATA_LAYER" LAYER="1" ORDER="2">
+      <contract>
+        <purpose>Load and validate Settings.json profiles, load/save install-type rule config with priority and fallback, and resolve user template paths.</purpose>
+        <inputs>
+          <param name="path" type="string" />
+        </inputs>
+        <outputs>
+          <param name="mapping rules" type="mapping profile model" />
+          <param name="install type rules" type="install type rule set" />
+        </outputs>
+        <errors>
+          <error code="SETTINGS_READ_FAILED" />
+          <error code="SETTINGS_SCHEMA_INVALID" />
+        </errors>
+      </contract>
+      <interface>
+        <export-loadProfiles PURPOSE="Load mapping profiles from settings" />
+        <export-loadInstallTypeRules PURPOSE="Load install-type resolver rules from json" />
+        <export-saveInstallTypeRules PURPOSE="Save install-type resolver rules to json" />
+        <export-openInstallTypeConfig PURPOSE="Open rule config file for EOM_НАСТРОЙКИ_ПРОКЛАДКИ" />
+      </interface>
+      <depends>Newtonsoft.Json</depends>
     </M-SETTINGS>
-
-    <M-LICENSE NAME="LicenseService" TYPE="UTILITY" LAYER="2" ORDER="1">
+    <M-ATTRIBUTES NAME="BlockAttributeService" TYPE="CORE_LOGIC" LAYER="1" ORDER="3">
       <contract>
-        <purpose>Validate license state before command execution.</purpose>
+        <purpose>Read and write Russian block attributes for load models including required fields ГРУППА, МОЩНОСТЬ, НАПРЯЖЕНИЕ, ЩИТ and optional ФАЗА, ПОМЕЩЕНИЕ, ПРИМЕЧАНИЕ.</purpose>
         <inputs>
-          <param name="context" type="command context" />
+          <param name="block id" type="ObjectId" />
         </inputs>
         <outputs>
-          <param name="state" type="valid|invalid|expired|disabled" />
-        </outputs>
-        <errors>
-          <error code="LICENSE_INVALID" />
-        </errors>
-      </contract>
-      <interface>
-        <export-validate PURPOSE="Validate command access by license" />
-      </interface>
-      <depends>M-SYSMGMT, M-SETTINGS, M-LOG</depends>
-    </M-LICENSE>
-
-    <M-ATTR NAME="AttributeService" TYPE="CORE_LOGIC" LAYER="2" ORDER="2">
-      <contract>
-        <purpose>Read and write block attributes with robust Cyrillic support.</purpose>
-        <inputs>
-          <param name="block-id" type="ObjectId" />
-        </inputs>
-        <outputs>
-          <param name="attributes" type="key-value map" />
+          <param name="attribute map" type="key/value dictionary" />
+          <param name="load model" type="validated load attribute model" />
         </outputs>
         <errors>
           <error code="ATTRIBUTE_ACCESS_FAILED" />
+          <error code="LOAD_ATTRIBUTE_MISSING" />
+          <error code="LOAD_POWER_NOT_NUMERIC" />
         </errors>
       </contract>
       <interface>
-        <export-readAttributes PURPOSE="Read attribute map from block" />
-        <export-writeAttributes PURPOSE="Write attribute map to block" />
+        <export-readAttributes PURPOSE="Read attributes from block reference" />
+        <export-writeAttributes PURPOSE="Write attributes to block reference" />
+        <export-parseLoadAttributes PURPOSE="Parse and validate Russian load attributes" />
       </interface>
-      <depends>M-ACAD</depends>
-    </M-ATTR>
-
-    <M-GEOM NAME="GeometryService" TYPE="CORE_LOGIC" LAYER="2" ORDER="3">
+      <depends>M-CAD-CONTEXT</depends>
+    </M-ATTRIBUTES>
+    <M-BLOCK-REPLACE NAME="BlockReplacementService" TYPE="CORE_LOGIC" LAYER="2" ORDER="1">
       <contract>
-        <purpose>Compute lengths and geometry metrics with mandatory UCS to WCS normalization.</purpose>
+        <purpose>Replace source block with mapped target block preserving insertion point and rotation and transferring key attributes.</purpose>
         <inputs>
-          <param name="route" type="curve|polyline" />
-          <param name="heights" type="source and target elevations" />
+          <param name="source block" type="ObjectId" />
+          <param name="target block name" type="string" />
         </inputs>
         <outputs>
-          <param name="length" type="double" />
+          <param name="result" type="replacement result" />
         </outputs>
         <errors>
-          <error code="GEOMETRY_CALC_FAILED" />
+          <error code="BLOCK_REPLACEMENT_FAILED" />
         </errors>
       </contract>
       <interface>
-        <export-normalizeUcsToWcs PURPOSE="Normalize geometry coordinates to WCS" />
-        <export-calculateCableLength PURPOSE="Calculate L_total = L_2d + ABS(H1-H2) + 5%" />
+        <export-replaceBlock PURPOSE="Replace one block instance" />
       </interface>
-      <depends>M-ACAD</depends>
-    </M-GEOM>
-
-    <M-XDATA NAME="XDataService" TYPE="CORE_LOGIC" LAYER="2" ORDER="4">
+      <depends>M-CAD-CONTEXT, M-ATTRIBUTES</depends>
+    </M-BLOCK-REPLACE>
+    <M-MAP-ORCHESTRATOR NAME="MapWorkflowOrchestrator" TYPE="CORE_LOGIC" LAYER="3" ORDER="1">
       <contract>
-        <purpose>Read and write structured XData with application key EOM_DATA.</purpose>
+        <purpose>Execute UC-MAP-01 end-to-end: selection, mapping lookup, and block replacement.</purpose>
         <inputs>
-          <param name="entity-id" type="ObjectId" />
-          <param name="payload" type="xdata model" />
+          <param name="command context" type="EOM_MAP request" />
         </inputs>
         <outputs>
-          <param name="payload" type="xdata model" />
+          <param name="report" type="mapping execution summary" />
         </outputs>
         <errors>
-          <error code="XDATA_ACCESS_FAILED" />
+          <error code="MAP_WORKFLOW_FAILED" />
         </errors>
       </contract>
       <interface>
-        <export-readEomData PURPOSE="Read EOM_DATA payload" />
-        <export-writeEomData PURPOSE="Write EOM_DATA payload" />
+        <export-executeMap PURPOSE="Run mapping workflow" />
       </interface>
-      <depends>M-ACAD</depends>
+      <depends>M-SELECTION, M-SETTINGS, M-BLOCK-REPLACE</depends>
+    </M-MAP-ORCHESTRATOR>
+    <M-COORDINATES NAME="CoordinateNormalizationService" TYPE="CORE_LOGIC" LAYER="1" ORDER="4">
+      <contract>
+        <purpose>Normalize geometry coordinates from UCS to WCS before engineering calculations.</purpose>
+        <inputs>
+          <param name="geometry" type="polyline/points" />
+        </inputs>
+        <outputs>
+          <param name="normalized geometry" type="WCS geometry" />
+        </outputs>
+        <errors>
+          <error code="COORDINATE_NORMALIZATION_FAILED" />
+        </errors>
+      </contract>
+      <interface>
+        <export-ucsToWcs PURPOSE="Convert selected geometry to WCS" />
+      </interface>
+      <depends>M-CAD-CONTEXT</depends>
+    </M-COORDINATES>
+    <M-CABLE-CALC NAME="CableLengthCalculator" TYPE="CORE_LOGIC" LAYER="2" ORDER="2">
+      <contract>
+        <purpose>Calculate cable length and aggregate by group and install type; resolve install type by linetype/layer priority rules with fallback default.</purpose>
+        <inputs>
+          <param name="L_2d" type="double" />
+          <param name="H1" type="double" />
+          <param name="H2" type="double" />
+          <param name="reserve" type="double" />
+          <param name="linetypeResolved" type="string" />
+          <param name="layerName" type="string" />
+          <param name="rules" type="install type rule set" />
+        </inputs>
+        <outputs>
+          <param name="L_total" type="double" />
+          <param name="installType" type="string" />
+          <param name="group aggregate" type="ЩИТ/ГРУППА power+length structure" />
+        </outputs>
+        <errors>
+          <error code="CABLE_CALCULATION_FAILED" />
+          <error code="INSTALL_TYPE_RULE_INVALID" />
+        </errors>
+      </contract>
+      <interface>
+        <export-calculateTotalLength PURPOSE="Calculate L_total = L_2d + ABS(H1-H2) + reserve" />
+        <export-resolveInstallType PURPOSE="Resolve install type with Priority, MatchBy, Value, Default" />
+        <export-aggregateByGroup PURPOSE="Aggregate loads and lines by ЩИТ and ГРУППА without connectivity analysis" />
+      </interface>
+      <depends>M-ATTRIBUTES, M-CONFIG, M-SETTINGS, M-CAD-CONTEXT</depends>
+    </M-CABLE-CALC>
+    <M-XDATA NAME="XDataService" TYPE="DATA_LAYER" LAYER="1" ORDER="5">
+      <contract>
+        <purpose>Read and write EOM_DATA payload on AutoCAD entities and maintain line group metadata via RegApp ELTOOL (or ExtensionDictionary fallback).</purpose>
+        <inputs>
+          <param name="entity id" type="ObjectId" />
+          <param name="payload" type="EOM data model" />
+          <param name="group code" type="string" />
+        </inputs>
+        <outputs>
+          <param name="payload" type="EOM data model" />
+          <param name="group code" type="string" />
+        </outputs>
+        <errors>
+          <error code="XDATA_READ_WRITE_FAILED" />
+          <error code="REGAPP_NOT_REGISTERED" />
+        </errors>
+      </contract>
+      <interface>
+        <export-readEomData PURPOSE="Read EOM_DATA from entity" />
+        <export-writeEomData PURPOSE="Write EOM_DATA to entity" />
+        <export-setLineGroup PURPOSE="Set ГРУППА for line/polyline in ELTOOL metadata" />
+        <export-getLineGroup PURPOSE="Get ГРУППА from line/polyline metadata" />
+        <export-setActiveGroup PURPOSE="Set runtime active group for current document" />
+        <export-assignGroupToSelection PURPOSE="Bulk assign ГРУППА to selected lines" />
+      </interface>
+      <depends>M-CAD-CONTEXT, M-CONFIG</depends>
     </M-XDATA>
-
-    <M-MAP NAME="BlockMappingService" TYPE="CORE_LOGIC" LAYER="3" ORDER="1">
+    <M-TRACE-ORCHESTRATOR NAME="TraceWorkflowOrchestrator" TYPE="CORE_LOGIC" LAYER="3" ORDER="2">
       <contract>
-        <purpose>Replace designer blocks by organization-standard blocks using mapping rules from settings.</purpose>
+        <purpose>Execute UC-TRACE-01 and EOM_ОБНОВИТЬ: collect loads and lines, normalize geometry, resolve install type, compute totals, and persist grouped result.</purpose>
         <inputs>
-          <param name="selection" type="block selection" />
-          <param name="profile" type="mapping profile" />
+          <param name="command context" type="EOM_TRACE or EOM_ОБНОВИТЬ request" />
         </inputs>
         <outputs>
-          <param name="report" type="replacement report" />
+          <param name="trace result" type="grouped length and cable metadata" />
         </outputs>
         <errors>
-          <error code="MAPPING_EXECUTION_FAILED" />
+          <error code="TRACE_WORKFLOW_FAILED" />
         </errors>
       </contract>
       <interface>
-        <export-executeMapping PURPOSE="Execute mapping for selected blocks" />
+        <export-executeTrace PURPOSE="Run trace workflow" />
+        <export-executeUpdate PURPOSE="Run full recalculation workflow for EOM_ОБНОВИТЬ" />
       </interface>
-      <depends>M-SETTINGS, M-ATTR, M-ACAD, M-LOG</depends>
-    </M-MAP>
-
-    <M-TRACE NAME="CableTraceService" TYPE="CORE_LOGIC" LAYER="3" ORDER="2">
+      <depends>M-SELECTION, M-COORDINATES, M-CABLE-CALC, M-XDATA, M-ATTRIBUTES, M-SETTINGS</depends>
+    </M-TRACE-ORCHESTRATOR>
+    <M-AGGREGATION NAME="SpecificationAggregationService" TYPE="CORE_LOGIC" LAYER="2" ORDER="3">
       <contract>
-        <purpose>Trace selected route and compute cable length including vertical delta and reserve.</purpose>
+        <purpose>Aggregate EOM_DATA records by shield, group, and install type and produce validation-ready data models.</purpose>
         <inputs>
-          <param name="polyline" type="route polyline" />
-          <param name="endpoints" type="source and consumer blocks" />
+          <param name="records" type="EOM data list" />
         </inputs>
         <outputs>
-          <param name="trace-result" type="length and cable metadata" />
+          <param name="rows" type="specification rows" />
+          <param name="issues" type="validation issue list" />
         </outputs>
         <errors>
-          <error code="TRACE_FAILED" />
+          <error code="SPEC_AGGREGATION_FAILED" />
         </errors>
       </contract>
       <interface>
-        <export-executeTrace PURPOSE="Execute trace workflow and persist EOM_DATA" />
+        <export-aggregate PURPOSE="Aggregate records for spec output" />
+        <export-validateData PURPOSE="Validate loads/lines/groups before export" />
       </interface>
-      <depends>M-GEOM, M-ATTR, M-XDATA, M-LOG</depends>
-    </M-TRACE>
-
-    <M-SPEC NAME="SpecificationService" TYPE="CORE_LOGIC" LAYER="4" ORDER="1">
+      <depends>M-XDATA, M-ATTRIBUTES, M-CONFIG</depends>
+    </M-AGGREGATION>
+    <M-EXPORT NAME="SpecificationExportService" TYPE="INTEGRATION" LAYER="3" ORDER="3">
       <contract>
-        <purpose>Scan drawing EOM_DATA and aggregate cable lengths by type and group.</purpose>
+        <purpose>Export Excel INPUT and read Excel OUTPUT through IExcelGateway, then export tabular data to AutoCAD table/CSV as needed.</purpose>
         <inputs>
-          <param name="scope" type="drawing scope" />
+          <param name="rows" type="specification rows" />
+          <param name="target" type="table or csv or excel-input" />
+          <param name="excel output" type="worksheet rows" />
         </inputs>
         <outputs>
-          <param name="dataset" type="specification dataset" />
+          <param name="status" type="export result" />
+          <param name="excel results" type="output rows" />
         </outputs>
         <errors>
-          <error code="SPEC_BUILD_FAILED" />
+          <error code="SPEC_EXPORT_FAILED" />
+          <error code="EXCEL_TEMPLATE_INVALID" />
+          <error code="EXCEL_GATEWAY_FAILED" />
         </errors>
       </contract>
       <interface>
-        <export-buildSpecification PURPOSE="Build aggregated specification dataset" />
+        <export-toTable PURPOSE="Export rows to AutoCAD table" />
+        <export-toCsv PURPOSE="Export rows to csv file" />
+        <export-toExcelInput PURPOSE="Write INPUT worksheet for Расчет_Шаблон.xlsx" />
+        <export-fromExcelOutput PURPOSE="Read OUTPUT worksheet from template file" />
+        <export-getExcelGateway PURPOSE="Provide pluggable IExcelGateway implementation" />
       </interface>
-      <depends>M-XDATA, M-SETTINGS, M-LOG</depends>
-    </M-SPEC>
-
-    <M-EXPORT NAME="SpecExportService" TYPE="INTEGRATION" LAYER="5" ORDER="1">
-      <contract>
-        <purpose>Export specification dataset to AutoCAD table and CSV.</purpose>
-        <inputs>
-          <param name="dataset" type="specification dataset" />
-          <param name="target" type="table|csv" />
-        </inputs>
-        <outputs>
-          <param name="result" type="export status" />
-        </outputs>
-        <errors>
-          <error code="EXPORT_FAILED" />
-        </errors>
-      </contract>
-      <interface>
-        <export-toAutoCadTable PURPOSE="Render specification into AutoCAD table" />
-        <export-toCsv PURPOSE="Save specification as CSV file" />
-      </interface>
-      <depends>M-SPEC, M-ACAD, M-LOG</depends>
+      <depends>M-CAD-CONTEXT, M-CONFIG, M-SETTINGS</depends>
     </M-EXPORT>
-
-    <M-COMMANDS NAME="CommandRegistry" TYPE="ENTRY_POINT" LAYER="6" ORDER="1">
+    <M-SPEC-ORCHESTRATOR NAME="SpecWorkflowOrchestrator" TYPE="CORE_LOGIC" LAYER="4" ORDER="1">
       <contract>
-        <purpose>Register AutoCAD commands and dispatch to domain services.</purpose>
+        <purpose>Execute UC-SPEC-01 and mixed workflows: export INPUT/import OUTPUT for Excel, build OLS from OUTPUT, and build panel layout from selected OLS blocks.</purpose>
         <inputs>
-          <param name="command" type="EOM_MAP|EOM_TRACE|EOM_SPEC" />
+          <param name="command context" type="EOM_SPEC/EOM_ЭКСПОРТ_EXCEL/EOM_ИМПОРТ_EXCEL/EOM_ПОСТРОИТЬ_ОЛС/EOM_КОМПОНОВКА_ЩИТА/EOM_ПРОВЕРКА request" />
         </inputs>
         <outputs>
-          <param name="status" type="command status" />
+          <param name="result" type="specification/export/import/build summary" />
+        </outputs>
+        <errors>
+          <error code="SPEC_WORKFLOW_FAILED" />
+        </errors>
+      </contract>
+      <interface>
+        <export-executeSpec PURPOSE="Run specification workflow" />
+        <export-exportExcel PURPOSE="Run EOM_ЭКСПОРТ_EXCEL" />
+        <export-importExcel PURPOSE="Run EOM_ИМПОРТ_EXCEL" />
+        <export-buildOlsModel PURPOSE="Build OLS drawing model from Excel OUTPUT" />
+        <export-buildPanelLayoutModel PURPOSE="Build panel layout model from selected OLS blocks and panel mapping config" />
+        <export-runChecks PURPOSE="Run EOM_ПРОВЕРКА validations" />
+      </interface>
+      <depends>M-AGGREGATION, M-EXPORT, M-CAD-CONTEXT, M-SETTINGS, M-LOGGING</depends>
+    </M-SPEC-ORCHESTRATOR>
+    <M-ENTRY-COMMANDS NAME="CommandEntryPoints" TYPE="ENTRY_POINT" LAYER="5" ORDER="1">
+      <contract>
+        <purpose>Register and dispatch EOM_MAP, EOM_TRACE, EOM_SPEC and additional operational commands without breaking existing entry points.</purpose>
+        <inputs>
+          <param name="command" type="registered EOM command names including EOM_LAYOUTCFG" />
+        </inputs>
+        <outputs>
+          <param name="status" type="command execution status" />
         </outputs>
         <errors>
           <error code="COMMAND_DISPATCH_FAILED" />
         </errors>
       </contract>
       <interface>
-        <export-registerCommands PURPOSE="Register EOM_MAP, EOM_TRACE, EOM_SPEC" />
-        <export-dispatch PURPOSE="Dispatch command execution" />
+        <export-registerCommands PURPOSE="Register plugin commands in AutoCAD" />
+        <export-dispatch PURPOSE="Dispatch command to target orchestrator" />
+        <export-setActiveGroupCommand PURPOSE="EOM_АКТИВНАЯ_ГРУППА command entry" />
+        <export-assignGroupCommand PURPOSE="EOM_НАЗНАЧИТЬ_ГРУППУ command entry" />
+        <export-openInstallTypeSettingsCommand PURPOSE="EOM_НАСТРОЙКИ_ПРОКЛАДКИ command entry" />
+        <export-openPanelLayoutConfigCommand PURPOSE="EOM_LAYOUTCFG command entry for panel layout UI editor" />
       </interface>
-      <depends>M-MAP, M-TRACE, M-SPEC, M-EXPORT, M-LICENSE, M-LOG</depends>
-    </M-COMMANDS>
-
-    <M-RIBBON NAME="RibbonManager" TYPE="UI_COMPONENT" LAYER="7" ORDER="1">
+      <depends>M-MAP-ORCHESTRATOR, M-TRACE-ORCHESTRATOR, M-SPEC-ORCHESTRATOR, M-SELECTION, M-CAD-CONTEXT, M-XDATA, M-PANEL-LAYOUT-CONFIG-UI, M-PANEL-LAYOUT-CONFIG-VM</depends>
+    </M-ENTRY-COMMANDS>
+    <M-RIBBON NAME="RibbonBuilder" TYPE="UI_COMPONENT" LAYER="5" ORDER="2">
       <contract>
-        <purpose>Create and manage Ribbon tab, panel, and command buttons.</purpose>
+        <purpose>Render the ЭОМ ПРО ribbon tab with full command coverage grouped by workflow category and operational mixed tooltips.</purpose>
         <inputs>
-          <param name="startup" type="plugin startup context" />
+          <param name="command map" type="command name to UI metadata" />
         </inputs>
         <outputs>
-          <param name="ribbon-state" type="created|updated" />
+          <param name="ribbon tab" type="tab with three panels and buttons" />
         </outputs>
         <errors>
+          <error code="RIBBON_UNAVAILABLE" />
           <error code="RIBBON_BUILD_FAILED" />
         </errors>
       </contract>
       <interface>
-        <export-buildRibbon PURPOSE="Build EOM PRO ribbon UI" />
+        <export-buildRibbon PURPOSE="Build full tab with Базовые, Excel/Схемы, Контроль/Настройки panels" />
+        <export-createButton PURPOSE="Create command button with action and mixed tooltip" />
       </interface>
-      <depends>M-COMMANDS, M-LOG</depends>
+      <depends>M-ENTRY-COMMANDS, M-CONFIG, M-LOGGING</depends>
     </M-RIBBON>
-
-    <M-ENTRY NAME="PluginEntry" TYPE="ENTRY_POINT" LAYER="8" ORDER="1">
+    <M-DOCS-COMMANDS NAME="CommandsGuide" TYPE="UTILITY" LAYER="5" ORDER="3">
       <contract>
-        <purpose>Bootstrap plugin lifecycle and compose startup services.</purpose>
+        <purpose>Provide operator-ready documentation for every EOM command with prerequisites, usage steps, outputs, and failure hints.</purpose>
         <inputs>
-          <param name="lifecycle" type="Initialize|Terminate" />
+          <param name="command list" type="registered commands and runtime dependencies" />
         </inputs>
         <outputs>
-          <param name="state" type="ready|stopped" />
+          <param name="guide" type="docs/COMMANDS.md manual" />
         </outputs>
         <errors>
-          <error code="PLUGIN_BOOTSTRAP_FAILED" />
+          <error code="DOC_OUTDATED" />
         </errors>
       </contract>
       <interface>
-        <export-initialize PURPOSE="Initialize plugin modules" />
-        <export-terminate PURPOSE="Terminate plugin modules" />
+        <export-commandMatrix PURPOSE="List commands with requirements and output artifacts" />
+        <export-quickStart PURPOSE="Describe minimal startup and first-use workflow" />
       </interface>
-      <depends>M-RIBBON, M-COMMANDS, M-LOG</depends>
-    </M-ENTRY>
+      <depends>M-ENTRY-COMMANDS, M-SETTINGS, M-EXPORT</depends>
+    </M-DOCS-COMMANDS>
+    <M-PANEL-LAYOUT-CONFIG-VM NAME="PanelLayoutConfigWindowViewModel" TYPE="UI_COMPONENT" LAYER="5" ORDER="4">
+      <contract>
+        <purpose>Provide editable panel layout mapping state and validation for SelectorRules/legacy LayoutMap with persistence to PanelLayoutMap.json.</purpose>
+        <inputs>
+          <param name="pick callbacks" type="source signature and layout block selection delegates" />
+        </inputs>
+        <outputs>
+          <param name="ui state" type="editable selector/legacy rules and attribute tags" />
+        </outputs>
+        <errors>
+          <error code="LAYOUT_CONFIG_INVALID" />
+          <error code="LAYOUT_CONFIG_SAVE_FAILED" />
+        </errors>
+      </contract>
+      <interface>
+        <export-loadMap PURPOSE="Load PanelLayoutMap.json into editable collections" />
+        <export-pickAndAddSelectorRule PURPOSE="Pick SOURCE and LAYOUT blocks from drawing and append selector rule" />
+        <export-saveMap PURPOSE="Validate and persist panel layout map configuration" />
+      </interface>
+      <depends>M-SETTINGS, M-LOGGING, M-MODELS, M-CONFIG</depends>
+    </M-PANEL-LAYOUT-CONFIG-VM>
+
+    <M-PANEL-LAYOUT-CONFIG-UI NAME="PanelLayoutConfigWindow" TYPE="UI_COMPONENT" LAYER="5" ORDER="5">
+      <contract>
+        <purpose>Render panel layout configuration UI and provide button-driven block binding flows for SOURCE and visualization block selection.</purpose>
+        <inputs>
+          <param name="view model" type="PanelLayoutConfigWindowViewModel" />
+        </inputs>
+        <outputs>
+          <param name="operator edits" type="selector/legacy rules and map settings updates" />
+        </outputs>
+        <errors>
+          <error code="LAYOUT_CONFIG_UI_FAILED" />
+        </errors>
+      </contract>
+      <interface>
+        <export-buildLayout PURPOSE="Build WPF layout for selector and legacy rules editing" />
+        <export-runPickActions PURPOSE="Execute drawing pick actions for SOURCE and LAYOUT from UI buttons" />
+      </interface>
+      <depends>M-PANEL-LAYOUT-CONFIG-VM, M-CAD-CONTEXT</depends>
+    </M-PANEL-LAYOUT-CONFIG-UI>
   </Modules>
-
+  <UseCaseExtensions>
+    <UC-UPDATE-01 NAME="Обновление расчетов и агрегатов">
+      <trigger>EOM_ОБНОВИТЬ</trigger>
+      <goal>Пересчитать длины и агрегаты по группам и типам прокладки без анализа связности линий.</goal>
+    </UC-UPDATE-01>
+    <UC-EXCEL-01 NAME="Экспорт входных данных в Excel">
+      <trigger>EOM_ЭКСПОРТ_EXCEL</trigger>
+      <goal>Сформировать лист INPUT в Расчет_Шаблон.xlsx.</goal>
+    </UC-EXCEL-01>
+    <UC-EXCEL-02 NAME="Импорт результатов из Excel">
+      <trigger>EOM_ИМПОРТ_EXCEL</trigger>
+      <goal>Прочитать лист OUTPUT и сохранить модель результатов.</goal>
+    </UC-EXCEL-02>
+    <UC-OLS-01 NAME="Построение однолинейки">
+      <trigger>EOM_ПОСТРОИТЬ_ОЛС</trigger>
+      <goal>Построить графику по выбранному щиту или всем щитам на основе Excel OUTPUT.</goal>
+    </UC-OLS-01>
+    <UC-LAYOUT-01 NAME="Компоновка щита">
+      <trigger>EOM_КОМПОНОВКА_ЩИТА</trigger>
+      <goal>Разложить аппараты из выделенной готовой ОЛС по рядам DIN по числу модулей в ряду.</goal>
+    </UC-LAYOUT-01>
+    <UC-CHECK-01 NAME="Проверка данных проекта">
+      <trigger>EOM_ПРОВЕРКА</trigger>
+      <goal>Показать список проблем с переходом к объекту.</goal>
+    </UC-CHECK-01>
+  </UseCaseExtensions>
+  <ExcelContract>
+    <TemplateFile>Расчет_Шаблон.xlsx</TemplateFile>
+    <Sheets>
+      <sheet-INPUT />
+      <sheet-OUTPUT />
+    </Sheets>
+    <INPUT_COLUMNS>
+      <col-ЩИТ />
+      <col-ГРУППА />
+      <col-МОЩНОСТЬ_кВт />
+      <col-НАПРЯЖЕНИЕ />
+      <col-ДЛИНА_м />
+      <col-ДЛИНА_ПОТОЛОК_м />
+      <col-ДЛИНА_ПОЛ_м />
+      <col-ДЛИНА_СТОЯК_м />
+      <col-ФАЗА optional="true" />
+      <col-ТИП_ГРУППЫ optional="true" />
+    </INPUT_COLUMNS>
+    <OUTPUT_COLUMNS>
+      <col-ЩИТ />
+      <col-ГРУППА />
+      <col-АВТОМАТ />
+      <col-УЗО_ДИФ />
+      <col-КАБЕЛЬ />
+      <col-МОДУЛЕЙ_АВТОМАТ />
+      <col-МОДУЛЕЙ_УЗО />
+      <col-ПРИМЕЧАНИЕ optional="true" />
+    </OUTPUT_COLUMNS>
+    <Gateway>
+      <option-1>OpenXML or EPPlus without Excel process</option-1>
+      <option-2>Interop with live Excel</option-2>
+      <selected>Hide implementation behind IExcelGateway interface</selected>
+    </Gateway>
+  </ExcelContract>
   <DataFlow>
-    <DF-MAP NAME="Block replacement" TRIGGER="EOM_MAP">
-      <step-1>CommandRegistry validates license state with LicenseService.</step-1>
-      <step-2>BlockMappingService loads mapping profile from SettingsRepository.</step-2>
-      <step-3>AttributeService reads source attributes including height values.</step-3>
-      <step-4>AutoCADAdapter replaces block preserving insertion point and rotation.</step-4>
-      <step-5>AttributeService writes transferred attributes to target block.</step-5>
-      <step-6>LogService writes replacement summary.</step-6>
-    </DF-MAP>
-
-    <DF-TRACE NAME="Cable tracing and length" TRIGGER="EOM_TRACE">
-      <step-1>CommandRegistry validates license and receives route and endpoints.</step-1>
-      <step-2>GeometryService normalizes selected route coordinates from UCS to WCS.</step-2>
-      <step-3>AttributeService reads endpoint attribute ВЫСОТА_УСТАНОВКИ.</step-3>
-      <step-4>GeometryService computes L_total = L_2d + ABS(H1-H2) + 5%.</step-4>
-      <step-5>XDataService writes length and cable mark to EOM_DATA on polyline.</step-5>
-      <step-6>LogService writes trace diagnostics and result.</step-6>
-    </DF-TRACE>
-
-    <DF-SPEC NAME="Specification generation" TRIGGER="EOM_SPEC">
-      <step-1>CommandRegistry validates license and triggers specification flow.</step-1>
-      <step-2>SpecificationService scans drawing for EOM_DATA payloads.</step-2>
-      <step-3>SpecificationService aggregates lengths by cable type and groups.</step-3>
-      <step-4>SpecExportService exports dataset to AutoCAD table or CSV.</step-4>
-      <step-5>LogService writes export status.</step-5>
-    </DF-SPEC>
+    <DF-MAP-01 NAME="Designer block replacement" TRIGGER="EOM_MAP">
+      <step-1>M-ENTRY-COMMANDS receives EOM_MAP and opens workflow transaction boundary.</step-1>
+      <step-2>M-MAP-ORCHESTRATOR requests block selection from M-SELECTION.</step-2>
+      <step-3>M-SETTINGS resolves source-to-target mapping rules by source block name.</step-3>
+      <step-4>M-BLOCK-REPLACE replaces each source block and transfers required attributes through M-ATTRIBUTES.</step-4>
+      <step-5>M-LOGGING writes execution summary and per-item diagnostics.</step-5>
+    </DF-MAP-01>
+    <DF-TRACE-01 NAME="Route tracing and cable length" TRIGGER="EOM_TRACE">
+      <step-1>M-ENTRY-COMMANDS receives EOM_TRACE or EOM_ОБНОВИТЬ and requests source entities via M-SELECTION.</step-1>
+      <step-2>M-TRACE-ORCHESTRATOR reads load blocks by configured masks and validates Russian attributes via M-ATTRIBUTES.</step-2>
+      <step-3>M-TRACE-ORCHESTRATOR reads cable lines and group metadata from M-XDATA without connectivity analysis.</step-3>
+      <step-4>M-COORDINATES normalizes selected route geometry from UCS to WCS and M-CAD-CONTEXT resolves effective linetype including ByLayer.</step-4>
+      <step-5>M-CABLE-CALC computes L_total and install type per line using rules (Priority/MatchBy/Value/Default).</step-5>
+      <step-6>M-CABLE-CALC aggregates by ЩИТ and ГРУППА: СУММАРНАЯ_МОЩНОСТЬ_Вт, ДЛИНА_ИТОГО_м, ДЛИНА_ПО_ТИПАМ_ПРОКЛАДКИ.</step-6>
+      <step-7>M-XDATA writes updated group trace payload and M-LOGGING reports lines with Default install type.</step-7>
+    </DF-TRACE-01>
+    <DF-SPEC-01 NAME="Specification generation" TRIGGER="EOM_SPEC">
+      <step-1>M-ENTRY-COMMANDS receives EOM_SPEC/EOM_ЭКСПОРТ_EXCEL/EOM_ИМПОРТ_EXCEL and starts specification scope.</step-1>
+      <step-2>M-SPEC-ORCHESTRATOR obtains grouped trace data and validation results from M-AGGREGATION.</step-2>
+      <step-3>M-EXPORT writes Excel INPUT (sheet INPUT) with required contract columns.</step-3>
+      <step-4>M-EXPORT reads Excel OUTPUT (sheet OUTPUT) through IExcelGateway and returns result rows.</step-4>
+      <step-5>M-SPEC-ORCHESTRATOR builds models for ведомость and EOM_ПОСТРОИТЬ_ОЛС from imported rows; EOM_КОМПОНОВКА_ЩИТА is built from selected OLS blocks.</step-5>
+      <step-6>M-LOGGING writes export/import status and EOM_ПРОВЕРКА issues.</step-6>
+    </DF-SPEC-01>
+    <DF-ACTIVE-GROUP-01 NAME="Runtime active group assignment" TRIGGER="EOM_АКТИВНАЯ_ГРУППА">
+      <step-1>M-ENTRY-COMMANDS accepts group code and stores active value for current document via M-XDATA runtime store.</step-1>
+      <step-2>M-CAD-CONTEXT object-appended handler filters new Line/Polyline entities.</step-2>
+      <step-3>M-XDATA assigns ГРУППА metadata to created entities using RegApp ELTOOL or ExtensionDictionary fallback.</step-3>
+    </DF-ACTIVE-GROUP-01>
+    <DF-ASSIGN-GROUP-01 NAME="Batch line group assignment" TRIGGER="EOM_НАЗНАЧИТЬ_ГРУППУ">
+      <step-1>M-ENTRY-COMMANDS requests line/polyline selection through M-SELECTION.</step-1>
+      <step-2>M-XDATA writes group metadata to selected entities in transaction-safe batch mode.</step-2>
+      <step-3>M-LOGGING reports assignment summary.</step-3>
+    </DF-ASSIGN-GROUP-01>
+    <DF-CHECK-01 NAME="Project validation and issue navigation" TRIGGER="EOM_ПРОВЕРКА">
+      <step-1>M-SPEC-ORCHESTRATOR requests validation from M-AGGREGATION and M-ATTRIBUTES.</step-1>
+      <step-2>M-LOGGING prints issues: missing ГРУППА, invalid МОЩНОСТЬ, lines without group, shield mismatch, default install type, optional regex mismatch.</step-2>
+      <step-3>M-SELECTION supports selecting object by issue.</step-3>
+    </DF-CHECK-01>
   </DataFlow>
-
   <ImplementationOrder>
     <Phase-1 name="Foundation" status="done">
-      <step-1 module="M-ACAD">Implement AutoCAD adapter and transaction helpers.</step-1>
-      <step-2 module="M-JSON">Implement JSON serialization adapter.</step-2>
-      <step-3 module="M-SYSMGMT">Implement hardware probe adapter.</step-3>
-      <step-4 module="M-LOG">Implement centralized logging service.</step-4>
+      <step-1 module="M-CONFIG">Implement shared constants for keys, commands, and reserve policy.</step-1>
+      <step-2 module="M-CAD-CONTEXT">Implement AutoCAD context and transaction helpers.</step-2>
+      <step-3 module="M-LOGGING">Implement structured logging service with block-aware tags.</step-3>
+      <step-4 module="M-EXPORT">Introduce IExcelGateway abstraction and template contract wiring.</step-4>
+      <step-5 module="M-CABLE-CALC">Introduce IInstallTypeResolver contract and fallback resolution rules.</step-5>
+      <step-6 module="M-SETTINGS">Add install-type rule config load/save and open-config command support.</step-6>
     </Phase-1>
-
-    <Phase-2 name="Data and Security" status="done">
-      <step-1 module="M-SETTINGS">Implement settings repository for Settings.json.</step-1>
-      <step-2 module="M-LICENSE">Implement license validation layer.</step-2>
+    <Phase-2 name="Shared Domain" status="done">
+      <step-1 module="M-SELECTION">Implement typed selection helpers for blocks and polylines.</step-1>
+      <step-2 module="M-ATTRIBUTES">Implement attribute read/write service for block references.</step-2>
+      <step-3 module="M-XDATA">Implement EOM_DATA read/write service.</step-3>
+      <step-4 module="M-COORDINATES">Implement UCS to WCS normalization service.</step-4>
+      <step-5 module="M-CABLE-CALC">Implement length formula and reserve logic.</step-5>
+      <step-6 module="M-SETTINGS">Implement mapping profile repository from Settings.json.</step-6>
+      <step-7 module="M-XDATA">Implement active-group runtime store and line group assignment (auto + batch).</step-7>
+      <step-8 module="M-CAD-CONTEXT">Implement object-appended subscription for Line/Polyline filtering.</step-8>
     </Phase-2>
-
-    <Phase-3 name="Domain Core" status="done">
-      <step-1 module="M-ATTR">Implement attribute read/write with Cyrillic safety.</step-1>
-      <step-2 module="M-GEOM">Implement geometry calculations with UCS to WCS normalization.</step-2>
-      <step-3 module="M-XDATA">Implement EOM_DATA XData read/write service.</step-3>
+    <Phase-3 name="MAP Use Case" status="done">
+      <step-1 module="M-BLOCK-REPLACE">Implement block replacement preserving insertion and rotation.</step-1>
+      <step-2 module="M-MAP-ORCHESTRATOR">Implement complete EOM_MAP orchestration.</step-2>
     </Phase-3>
-
-    <Phase-4 name="UseCase Services" status="done">
-      <step-1 module="M-MAP">Implement block mapping workflow.</step-1>
-      <step-2 module="M-TRACE">Implement trace and length workflow.</step-2>
-      <step-3 module="M-SPEC">Implement specification aggregation workflow.</step-3>
-      <step-4 module="M-EXPORT">Implement AutoCAD table and CSV export workflow.</step-4>
+    <Phase-4 name="TRACE Use Case" status="done">
+      <step-1 module="M-TRACE-ORCHESTRATOR">Implement complete EOM_TRACE orchestration.</step-1>
+      <step-2 module="M-TRACE-ORCHESTRATOR">Extend trace aggregation by ЩИТ/ГРУППА and install-type lengths.</step-2>
+      <step-3 module="M-CABLE-CALC">Implement linetype/layer resolver with ByLayer handling and Default tracking.</step-3>
+      <step-4 module="M-ENTRY-COMMANDS">Add EOM_ОБНОВИТЬ wrapper command bound to trace recalculation path.</step-4>
     </Phase-4>
-
-    <Phase-5 name="Entry and UI" status="done">
-      <step-1 module="M-COMMANDS">Implement command registration and dispatch.</step-1>
-      <step-2 module="M-RIBBON">Implement ribbon composition.</step-2>
-      <step-3 module="M-ENTRY">Implement plugin entry bootstrap.</step-3>
+    <Phase-5 name="SPEC Use Case" status="done">
+      <step-1 module="M-AGGREGATION">Implement XData aggregation by type and group.</step-1>
+      <step-2 module="M-EXPORT">Implement AutoCAD table and CSV export.</step-2>
+      <step-3 module="M-SPEC-ORCHESTRATOR">Implement complete EOM_SPEC orchestration.</step-3>
+      <step-4 module="M-EXPORT">Implement Excel INPUT export and OUTPUT import via IExcelGateway.</step-4>
+      <step-5 module="M-SPEC-ORCHESTRATOR">Implement EOM_ЭКСПОРТ_EXCEL and EOM_ИМПОРТ_EXCEL command workflows.</step-5>
+      <step-6 module="M-SPEC-ORCHESTRATOR">Implement OLS build model from Excel OUTPUT and panel layout model from selected OLS blocks.</step-6>
+      <step-7 module="M-SPEC-ORCHESTRATOR">Implement EOM_ПРОВЕРКА with issue list generation.</step-7>
     </Phase-5>
+    <Phase-6 name="Entry Points" status="done">
+      <step-1 module="M-ENTRY-COMMANDS">Register and dispatch EOM command entry points.</step-1>
+      <step-2 module="M-ENTRY-COMMANDS">Add commands EOM_АКТИВНАЯ_ГРУППА and EOM_НАЗНАЧИТЬ_ГРУППУ.</step-2>
+      <step-3 module="M-ENTRY-COMMANDS">Add commands EOM_НАСТРОЙКИ_ПРОКЛАДКИ, EOM_ЭКСПОРТ_EXCEL, EOM_ИМПОРТ_EXCEL, EOM_ПОСТРОИТЬ_ОЛС, EOM_КОМПОНОВКА_ЩИТА, EOM_СВЯЗАТЬ_ВИЗУАЛИЗАЦИЮ, EOM_ПРОВЕРКА.</step-3>
+    </Phase-6>
+    <Phase-7 name="Ribbon UX and Ops Docs" status="done">
+      <step-1 module="M-RIBBON">Expose all active commands on the ribbon in three panels with mixed tooltips.</step-1>
+      <step-2 module="M-SETTINGS">Resolve Settings.json and InstallTypeRules.json near plugin DLL for deterministic runtime.</step-2>
+      <step-3 module="M-EXPORT">Add explicit prechecks and actionable diagnostics for missing Excel OUTPUT.</step-3>
+      <step-4 module="M-DOCS-COMMANDS">Create command usage guide with minimal startup flow and per-command prerequisites.</step-4>
+    </Phase-7>
   </ImplementationOrder>
+  <AcceptanceCriteria>
+    <AC-1>Пользователь может установить активную группу и автоматически присваивать ее новым линиям.</AC-1>
+    <AC-2>Пользователь может массово назначить ГРУППА на выделенные линии.</AC-2>
+    <AC-3>EOM_ОБНОВИТЬ формирует корректные длины по группам и по типам прокладки.</AC-3>
+    <AC-4>EOM_ЭКСПОРТ_EXCEL создает корректно заполненный лист INPUT.</AC-4>
+    <AC-5>EOM_ИМПОРТ_EXCEL читает OUTPUT и формирует модели для OLS и компоновки щита.</AC-5>
+    <AC-6>EOM_ПОСТРОИТЬ_ОЛС строит однолинейку из Excel OUTPUT по выбранному щиту или всем щитам.</AC-6>
+    <AC-7>EOM_КОМПОНОВКА_ЩИТА строит раскладку по рядам с настройкой модулей в ряду по выделенной ОЛС с маппингом через SelectorRules (SOURCE block+visibility) и fallback через legacy АППАРАТ.</AC-7>
+    <AC-12>EOM_КОМПОНОВКА_ЩИТА пропускает нераспознанные аппараты и выводит отчёт по пропущенным объектам.</AC-12>
+    <AC-13>EOM_СВЯЗАТЬ_ВИЗУАЛИЗАЦИЮ сохраняет правило SOURCE block+visibility -&gt; LayoutBlockName в глобальный PanelLayoutMap.json.</AC-13>
+    <AC-8>EOM_ПРОВЕРКА выявляет пустые группы/мощности и линии без группы, default install type, mismatch щита, optional regex mismatch.</AC-8>
+    <AC-9>Лента ЭОМ ПРО отображает все доступные команды в панелях Базовые, Excel/Схемы, Контроль/Настройки.</AC-9>
+    <AC-10>Settings.json и InstallTypeRules.json читаются и сохраняются в директории ElTools.dll.</AC-10>
+    <AC-11>Команды Excel выводят явные подсказки по отсутствующему OUTPUT и ожидаемому пути файла.</AC-11>
+  </AcceptanceCriteria>
+  <Risks>
+    <RISK-1>Missing or malformed block attributes can break transfer and length calculations.</RISK-1>
+    <RISK-2>XData RegApp conflicts can prevent reading or writing EOM_DATA.</RISK-2>
+    <RISK-3>User selection of wrong entity types can produce workflow interruption.</RISK-3>
+    <RISK-4>Complex UCS setups may introduce coordinate conversion mistakes.</RISK-4>
+    <RISK-5>Batch replacement requires safe transaction rollback on partial failures.</RISK-5>
+    <RISK-6>Linetype ByLayer resolution may produce incorrect install type if layer or linetype tables are stale.</RISK-6>
+    <RISK-7>Install-type rule priorities and fallback default can drift from engineering expectations.</RISK-7>
+    <RISK-8>Mass XData writes for group assignment can fail partially without robust transaction isolation and retry policy.</RISK-8>
+    <RISK-9>Неоднозначные пользовательские пути шаблонов Excel могут приводить к созданию INPUT/OUTPUT в неожиданной директории.</RISK-9>
+  </Risks>
 </DevelopmentPlan>
+
+
+
 

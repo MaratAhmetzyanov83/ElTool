@@ -1,208 +1,413 @@
 ﻿<KnowledgeGraph>
-  <Project NAME="ElTools" VERSION="0.1.0">
-    <keywords>AutoCAD API, C#, .NET 8, ЭОМ, Трассировка кабеля, Однолинейные схемы, BIM, Автоматизация проектирования, XData</keywords>
-    <annotation>ElTools — AutoCAD plugin for EOM workflows: block replacement, cable tracing with elevation-aware length, and specification export.</annotation>
-
-    <M-ENTRY NAME="PluginEntry" TYPE="ENTRY_POINT">
-      <purpose>Plugin lifecycle bootstrap and composition root.</purpose>
-      <path>src/Core/PluginApp.cs</path>
-      <depends>M-RIBBON, M-COMMANDS, M-LOG</depends>
-      <annotations>
-        <fn-initialize PURPOSE="Initialize plugin and startup modules" />
-        <fn-terminate PURPOSE="Terminate plugin and release resources" />
-      </annotations>
-    </M-ENTRY>
-
-    <M-RIBBON NAME="RibbonManager" TYPE="UI_COMPONENT">
-      <purpose>Compose EOM PRO ribbon tab and command buttons.</purpose>
-      <path>src/Core/RibbonBuilder.cs</path>
-      <depends>M-COMMANDS, M-LOG</depends>
-      <annotations>
-        <fn-buildRibbon PURPOSE="Build ribbon UI with command buttons" />
-      </annotations>
-    </M-RIBBON>
-
-    <M-COMMANDS NAME="CommandRegistry" TYPE="ENTRY_POINT">
-      <purpose>Register and dispatch EOM_MAP, EOM_TRACE, EOM_SPEC commands.</purpose>
+  <Project NAME="ElTool" VERSION="0.6.0">
+    <keywords>AutoCAD API, C#, .NET, AutoCAD 2021+, EOM, block mapping, cable tracing, specification, XData, Excel</keywords>
+    <annotation>Operational graph synced with current codebase, including full ribbon command exposure, stable settings paths, and command usage documentation.</annotation>
+    <M-ENTRY-COMMANDS NAME="CommandEntryPoints" TYPE="ENTRY_POINT">
+      <purpose>Command registration and dispatch for existing and new operational commands.</purpose>
       <path>src/Commands/CommandRegistry.cs</path>
-      <depends>M-MAP, M-TRACE, M-SPEC, M-EXPORT, M-LICENSE, M-LOG</depends>
+      <depends>M-MAP-ORCHESTRATOR, M-TRACE-ORCHESTRATOR, M-SPEC-ORCHESTRATOR, M-SELECTION, M-EXPORT, M-SETTINGS, M-XDATA, M-CAD-CONTEXT, M-LOGGING, M-LICENSE, M-PANEL-LAYOUT-CONFIG-UI, M-PANEL-LAYOUT-CONFIG-VM</depends>
       <annotations>
-        <fn-registerCommands PURPOSE="Register AutoCAD command methods" />
-        <fn-dispatch PURPOSE="Dispatch command to target service" />
+        <fn-registerCommands PURPOSE="Register command methods in AutoCAD runtime" />
+        <fn-dispatch PURPOSE="Dispatch command to orchestrator" />
+        <fn-cmd-EOM_ОБНОВИТЬ PURPOSE="Run trace recalculation wrapper command" />
+        <fn-cmd-EOM_ЭКСПОРТ_EXCEL PURPOSE="Run export to Excel INPUT command" />
+        <fn-cmd-EOM_ИМПОРТ_EXCEL PURPOSE="Run import from Excel OUTPUT command" />
+        <fn-cmd-EOM_ПОСТРОИТЬ_ОЛС PURPOSE="Run OLS build command from imported output" />
+        <fn-cmd-EOM_КОМПОНОВКА_ЩИТА PURPOSE="Run panel layout build command" />
+        <fn-cmd-EOM_СВЯЗАТЬ_ВИЗУАЛИЗАЦИЮ PURPOSE="Bind selected OLS source block signature to visualization block" />
+        <fn-cmd-EOM_ПРОВЕРКА PURPOSE="Run project validation command" />
+        <fn-cmd-EOM_АКТИВНАЯ_ГРУППА PURPOSE="Set runtime active line group" />
+        <fn-cmd-EOM_НАЗНАЧИТЬ_ГРУППУ PURPOSE="Bulk assign line group to selection" />
+        <fn-cmd-EOM_НАСТРОЙКИ_ПРОКЛАДКИ PURPOSE="Open install-type rule config" />
+        <fn-cmd-EOM_LAYOUTCFG PURPOSE="Open panel layout configuration UI editor" />
       </annotations>
-    </M-COMMANDS>
-
-    <M-ACAD NAME="AutoCADAdapter" TYPE="INTEGRATION">
-      <purpose>Safe AutoCAD API access and coordinate conversion operations.</purpose>
+    </M-ENTRY-COMMANDS>
+    <M-CAD-CONTEXT NAME="CadContextAdapter" TYPE="INTEGRATION">
+      <purpose>Unified document, database, editor, transactions, event subscriptions, and effective linetype resolution.</purpose>
       <path>src/Integrations/AutoCADAdapter.cs</path>
       <depends>none</depends>
       <annotations>
-        <fn-getActiveDocument PURPOSE="Get active document safely" />
+        <fn-getActiveContext PURPOSE="Get active CAD context" />
         <fn-runTransaction PURPOSE="Run operation in transaction" />
-        <fn-ucsToWcs PURPOSE="Convert input geometry from UCS to WCS" />
+        <fn-subscribeObjectAppended PURPOSE="Subscribe to object creation in document" />
+        <fn-resolveLinetype PURPOSE="Resolve effective linetype including ByLayer" />
       </annotations>
-    </M-ACAD>
-
-    <M-LOG NAME="LogService" TYPE="UTILITY">
-      <purpose>Unified diagnostics and command logs.</purpose>
-      <path>src/Services/LogService.cs</path>
-      <depends>M-ACAD</depends>
+    </M-CAD-CONTEXT>
+    <M-SELECTION NAME="SelectionService" TYPE="INTEGRATION">
+      <purpose>Entity selection and type validation for blocks and cable lines.</purpose>
+      <path>src/Commands/CommandRegistry.cs</path>
+      <depends>M-CAD-CONTEXT</depends>
       <annotations>
-        <fn-write PURPOSE="Write message to AutoCAD editor" />
+        <fn-selectBlocks PURPOSE="Select block references by filter" />
+        <fn-selectPolyline PURPOSE="Select polyline route" />
+        <fn-selectCableLines PURPOSE="Select line/polyline entities" />
+        <fn-selectByIssue PURPOSE="Select object from validation issue list" />
       </annotations>
-    </M-LOG>
-
-    <M-JSON NAME="JsonAdapter" TYPE="INTEGRATION">
-      <purpose>JSON serialization/deserialization for settings models.</purpose>
-      <path>src/Integrations/JsonAdapter.cs</path>
-      <depends>none</depends>
-      <annotations>
-        <fn-serialize PURPOSE="Serialize object to json" />
-        <fn-deserialize PURPOSE="Deserialize json to object" />
-      </annotations>
-    </M-JSON>
-
+    </M-SELECTION>
     <M-SETTINGS NAME="SettingsRepository" TYPE="DATA_LAYER">
-      <purpose>Settings persistence in Settings.json.</purpose>
+      <purpose>Read and validate mapping profiles and install-type rules from JSON configs.</purpose>
       <path>src/Data/SettingsRepository.cs</path>
-      <depends>M-JSON, M-LOG</depends>
+      <depends>M-JSON-ADAPTER, M-LOGGING, M-CONFIG</depends>
       <annotations>
-        <fn-loadSettings PURPOSE="Load mapping and plugin settings" />
-        <fn-saveSettings PURPOSE="Save mapping and plugin settings" />
-        <type-SettingsModel PURPOSE="Settings schema root model" />
+        <fn-loadProfiles PURPOSE="Load mapping profiles" />
+        <fn-loadInstallTypeRules PURPOSE="Load install type rules with priorities" />
+        <fn-saveInstallTypeRules PURPOSE="Save install type rules" />
+        <fn-openInstallTypeConfig PURPOSE="Open rule file for edit" />
+        <fn-loadPanelLayoutMap PURPOSE="Load selector and legacy OLS-to-layout visualization map from PanelLayoutMap.json" />
+        <type-MappingProfile PURPOSE="Mapping profile model" />
+        <type-InstallTypeRule PURPOSE="Single install-type resolver rule" />
+        <type-PanelLayoutSelectorRule PURPOSE="OLS source signature (block+visibility) to layout block mapping rule" />
+        <type-PanelLayoutMapRule PURPOSE="Legacy OLS device (АППАРАТ) fallback mapping rule" />
       </annotations>
     </M-SETTINGS>
-
-    <M-SYSMGMT NAME="HardwareProbeAdapter" TYPE="INTEGRATION">
-      <purpose>Read hardware identity for licensing.</purpose>
-      <path>src/Integrations/HardwareProbeAdapter.cs</path>
-      <depends>none</depends>
-      <annotations>
-        <fn-getHardwareId PURPOSE="Read machine hardware id" />
-      </annotations>
-    </M-SYSMGMT>
-
-    <M-LICENSE NAME="LicenseService" TYPE="UTILITY">
-      <purpose>License validation gate before command execution.</purpose>
-      <path>src/Services/LicenseService.cs</path>
-      <depends>M-SYSMGMT, M-SETTINGS, M-LOG</depends>
-      <annotations>
-        <fn-validate PURPOSE="Validate command permission by license" />
-        <type-LicenseState PURPOSE="License validation result" />
-      </annotations>
-    </M-LICENSE>
-
-    <M-ATTR NAME="AttributeService" TYPE="CORE_LOGIC">
-      <purpose>Read/write block attributes with Cyrillic-safe handling.</purpose>
+    <M-ATTRIBUTES NAME="BlockAttributeService" TYPE="CORE_LOGIC">
+      <purpose>Read and write Russian block attributes and validate required load fields.</purpose>
       <path>src/Services/AttributeService.cs</path>
-      <depends>M-ACAD</depends>
+      <depends>M-CAD-CONTEXT</depends>
       <annotations>
         <fn-readAttributes PURPOSE="Read block attributes" />
         <fn-writeAttributes PURPOSE="Write block attributes" />
+        <fn-parseLoadAttributes PURPOSE="Parse ГРУППА/МОЩНОСТЬ/НАПРЯЖЕНИЕ/ЩИТ fields" />
+        <type-LoadAttributes PURPOSE="Validated load attribute model" />
       </annotations>
-    </M-ATTR>
-
-    <M-GEOM NAME="GeometryService" TYPE="CORE_LOGIC">
-      <purpose>Cable geometry calculations with UCS to WCS normalization.</purpose>
+    </M-ATTRIBUTES>
+    <M-BLOCK-REPLACE NAME="BlockReplacementService" TYPE="CORE_LOGIC">
+      <purpose>Replace a source block with mapped target preserving insertion and rotation.</purpose>
+      <path>src/Services/BlockMappingService.cs</path>
+      <depends>M-CAD-CONTEXT, M-LOGGING</depends>
+      <annotations>
+        <fn-replaceBlock PURPOSE="Replace source block instance" />
+      </annotations>
+    </M-BLOCK-REPLACE>
+    <M-MAP-ORCHESTRATOR NAME="MapWorkflowOrchestrator" TYPE="CORE_LOGIC">
+      <purpose>Execute UC-MAP-01 workflow from selection to replacement summary.</purpose>
+      <path>src/Commands/CommandRegistry.cs</path>
+      <depends>M-SELECTION, M-SETTINGS, M-BLOCK-REPLACE, M-LOGGING</depends>
+      <annotations>
+        <fn-executeMap PURPOSE="Run EOM_MAP use case" />
+      </annotations>
+    </M-MAP-ORCHESTRATOR>
+    <M-COORDINATES NAME="CoordinateNormalizationService" TYPE="CORE_LOGIC">
+      <purpose>Coordinate system normalization from UCS to WCS.</purpose>
       <path>src/Services/GeometryService.cs</path>
-      <depends>M-ACAD</depends>
+      <depends>M-CAD-CONTEXT</depends>
       <annotations>
-        <fn-normalizeUcsToWcs PURPOSE="Normalize route geometry to WCS" />
-        <fn-calculateCableLength PURPOSE="Compute L_total = L_2d + ABS(H1-H2) + 5%" />
+        <fn-ucsToWcs PURPOSE="Normalize geometry to WCS" />
       </annotations>
-    </M-GEOM>
-
-    <M-XDATA NAME="XDataService" TYPE="CORE_LOGIC">
-      <purpose>Read/write EOM_DATA payload in entity XData.</purpose>
-      <path>src/Services/XDataService.cs</path>
-      <depends>M-ACAD</depends>
+    </M-COORDINATES>
+    <M-CABLE-CALC NAME="CableLengthCalculator" TYPE="CORE_LOGIC">
+      <purpose>Compute cable totals and resolve install type by linetype/layer rules.</purpose>
+      <path>src/Services/CableTraceService.cs</path>
+      <depends>M-COORDINATES, M-ATTRIBUTES, M-XDATA, M-LOGGING, M-SETTINGS, M-INSTALL-TYPE-RESOLVER</depends>
       <annotations>
-        <fn-readEomData PURPOSE="Read EOM_DATA payload from entity" />
-        <fn-writeEomData PURPOSE="Write EOM_DATA payload to entity" />
+        <fn-calculateTotalLength PURPOSE="Calculate L_total by formula" />
+        <fn-resolveInstallType PURPOSE="Resolve install type with priority and default" />
+        <fn-aggregateByGroup PURPOSE="Aggregate by ЩИТ and ГРУППА without connectivity analysis" />
+        <type-InstallTypeLengthMap PURPOSE="Length totals per install type" />
+      </annotations>
+    </M-CABLE-CALC>
+    <M-XDATA NAME="XDataService" TYPE="DATA_LAYER">
+      <purpose>Read and write EOM_DATA and line group metadata using RegApp ELTOOL with fallback storage.</purpose>
+      <path>src/Services/XDataService.cs</path>
+      <depends>M-CAD-CONTEXT, M-CONFIG, M-MODELS</depends>
+      <annotations>
+        <fn-readEomData PURPOSE="Read EOM_DATA payload" />
+        <fn-writeEomData PURPOSE="Write EOM_DATA payload" />
+        <fn-setLineGroup PURPOSE="Write ГРУППА metadata to line/polyline" />
+        <fn-getLineGroup PURPOSE="Read ГРУППА metadata from line/polyline" />
+        <fn-setActiveGroup PURPOSE="Set active group for current session/document" />
+        <fn-assignGroupToSelection PURPOSE="Bulk assign line group" />
+        <type-EomData PURPOSE="Persisted EOM payload model" />
       </annotations>
     </M-XDATA>
-
-    <M-MAP NAME="BlockMappingService" TYPE="CORE_LOGIC">
-      <purpose>Block replacement according to mapping rules and attribute transfer.</purpose>
-      <path>src/Services/BlockMappingService.cs</path>
-      <depends>M-SETTINGS, M-ATTR, M-ACAD, M-LOG</depends>
+    <M-TRACE-ORCHESTRATOR NAME="TraceWorkflowOrchestrator" TYPE="CORE_LOGIC">
+      <purpose>Execute UC-TRACE-01 and EOM_ОБНОВИТЬ workflow including grouped aggregation and install-type distribution.</purpose>
+      <path>src/Commands/CommandRegistry.cs</path>
+      <depends>M-SELECTION, M-COORDINATES, M-CABLE-CALC, M-XDATA, M-ATTRIBUTES, M-SETTINGS, M-LOGGING</depends>
       <annotations>
-        <fn-executeMapping PURPOSE="Run block mapping for user selection" />
+        <fn-executeTrace PURPOSE="Run EOM_TRACE use case" />
+        <fn-executeUpdate PURPOSE="Run EOM_ОБНОВИТЬ recalculation" />
+        <type-GroupAggregate PURPOSE="ЩИТ/ГРУППА aggregate model with power and lengths" />
       </annotations>
-    </M-MAP>
-
-    <M-TRACE NAME="CableTraceService" TYPE="CORE_LOGIC">
-      <purpose>Route tracing and cable length calculation with XData persistence.</purpose>
-      <path>src/Services/CableTraceService.cs</path>
-      <depends>M-GEOM, M-ATTR, M-XDATA, M-LOG</depends>
-      <annotations>
-        <fn-executeTrace PURPOSE="Trace route and persist trace result" />
-        <type-TraceResult PURPOSE="Trace output model" />
-      </annotations>
-    </M-TRACE>
-
-    <M-SPEC NAME="SpecificationService" TYPE="CORE_LOGIC">
-      <purpose>Aggregate cable data from EOM_DATA into specification dataset.</purpose>
+    </M-TRACE-ORCHESTRATOR>
+    <M-AGGREGATION NAME="SpecificationAggregationService" TYPE="CORE_LOGIC">
+      <purpose>Aggregate grouped data for specification and produce validation issues.</purpose>
       <path>src/Services/SpecificationService.cs</path>
-      <depends>M-XDATA, M-SETTINGS, M-LOG</depends>
+      <depends>M-XDATA, M-SETTINGS, M-LOGGING, M-MODELS</depends>
       <annotations>
-        <fn-buildSpecification PURPOSE="Build grouped specification rows" />
-        <type-SpecificationRow PURPOSE="Aggregated specification row" />
+        <fn-aggregate PURPOSE="Aggregate specification rows" />
+        <fn-validateData PURPOSE="Validate project data and produce issue list" />
+        <type-SpecRow PURPOSE="Aggregated specification row" />
+        <type-ValidationIssue PURPOSE="Validation issue model" />
       </annotations>
-    </M-SPEC>
-
-    <M-EXPORT NAME="SpecExportService" TYPE="INTEGRATION">
-      <purpose>Export specification dataset to AutoCAD table and CSV.</purpose>
+    </M-AGGREGATION>
+    <M-EXPORT NAME="SpecificationExportService" TYPE="INTEGRATION">
+      <purpose>Export to AutoCAD/CSV and integrate Excel INPUT/OUTPUT via IExcelGateway abstraction.</purpose>
       <path>src/Integrations/SpecExportService.cs</path>
-      <depends>M-SPEC, M-ACAD, M-LOG</depends>
+      <depends>M-AGGREGATION, M-CAD-CONTEXT, M-LOGGING, M-EXCEL-GATEWAY</depends>
       <annotations>
-        <fn-toAutoCadTable PURPOSE="Export dataset to AutoCAD table" />
-        <fn-toCsv PURPOSE="Export dataset to CSV file" />
+        <fn-toTable PURPOSE="Export to AutoCAD table" />
+        <fn-toCsv PURPOSE="Export to CSV" />
+        <fn-toExcelInput PURPOSE="Write INPUT worksheet" />
+        <fn-fromExcelOutput PURPOSE="Read OUTPUT worksheet" />
+        <type-IExcelGateway PURPOSE="Abstract Excel implementation (OpenXML/EPPlus/Interop)" />
       </annotations>
     </M-EXPORT>
-
-    <CrossLink from="M-ENTRY" to="M-RIBBON" relation="boots" />
-    <CrossLink from="M-ENTRY" to="M-COMMANDS" relation="boots" />
-    <CrossLink from="M-ENTRY" to="M-LOG" relation="uses" />
-
-    <CrossLink from="M-RIBBON" to="M-COMMANDS" relation="binds" />
-    <CrossLink from="M-RIBBON" to="M-LOG" relation="uses" />
-
-    <CrossLink from="M-COMMANDS" to="M-MAP" relation="dispatches" />
-    <CrossLink from="M-COMMANDS" to="M-TRACE" relation="dispatches" />
-    <CrossLink from="M-COMMANDS" to="M-SPEC" relation="dispatches" />
-    <CrossLink from="M-COMMANDS" to="M-EXPORT" relation="dispatches" />
-    <CrossLink from="M-COMMANDS" to="M-LICENSE" relation="uses" />
-    <CrossLink from="M-COMMANDS" to="M-LOG" relation="uses" />
-
-    <CrossLink from="M-LOG" to="M-ACAD" relation="uses" />
-    <CrossLink from="M-SETTINGS" to="M-JSON" relation="uses" />
-    <CrossLink from="M-SETTINGS" to="M-LOG" relation="uses" />
-
-    <CrossLink from="M-LICENSE" to="M-SYSMGMT" relation="uses" />
+    <M-SPEC-ORCHESTRATOR NAME="SpecWorkflowOrchestrator" TYPE="CORE_LOGIC">
+      <purpose>Execute UC-SPEC-01 and Excel-driven outputs: ведомость, OLS, panel layout, and checks.</purpose>
+      <path>src/Commands/CommandRegistry.cs</path>
+      <depends>M-AGGREGATION, M-EXPORT, M-CAD-CONTEXT, M-SETTINGS, M-LOGGING, M-SELECTION</depends>
+      <annotations>
+        <fn-executeSpec PURPOSE="Run EOM_SPEC use case" />
+        <fn-exportExcel PURPOSE="Run EOM_ЭКСПОРТ_EXCEL" />
+        <fn-importExcel PURPOSE="Run EOM_ИМПОРТ_EXCEL" />
+        <fn-buildOlsModel PURPOSE="Prepare OLS model from Excel OUTPUT" />
+        <fn-selectOlsEntities PURPOSE="Select OLS blocks manually for layout source" />
+        <fn-parseOlsDeviceAttributes PURPOSE="Parse selected OLS blocks with signature (effective name + visibility), optional АППАРАТ and МОДУЛЕЙ" />
+        <fn-mapOlsDeviceToLayoutBlock PURPOSE="Resolve layout visualization block by selector rules with legacy АППАРАТ fallback" />
+        <fn-buildPanelLayoutModel PURPOSE="Prepare panel layout model from mapped OLS devices" />
+        <fn-drawPanelLayout PURPOSE="Render DIN-row panel layout by inserting mapped layout blocks" />
+        <fn-bindPanelLayoutVisualization PURPOSE="Persist source OLS signature to layout block selector rule in PanelLayoutMap.json" />
+        <fn-reportSkippedOlsDevices PURPOSE="Log skipped OLS objects with reasons" />
+        <fn-runChecks PURPOSE="Run EOM_ПРОВЕРКА checks" />
+        <type-OlsRow PURPOSE="OLS drawing model row" />
+        <type-PanelLayoutRow PURPOSE="Panel layout model row" />
+      </annotations>
+    </M-SPEC-ORCHESTRATOR>
+    <M-LOGGING NAME="LoggingService" TYPE="UTILITY">
+      <purpose>Structured diagnostics for workflows and adapters.</purpose>
+      <path>src/Services/LogService.cs</path>
+      <depends>M-CAD-CONTEXT</depends>
+      <annotations>
+        <fn-info PURPOSE="Write info diagnostics" />
+        <fn-error PURPOSE="Write error diagnostics" />
+        <fn-reportIssues PURPOSE="Write issue list with object links" />
+      </annotations>
+    </M-LOGGING>
+    <M-RIBBON NAME="RibbonBuilder" TYPE="UI_COMPONENT">
+      <purpose>Build and maintain the ЭОМ ПРО ribbon tab with grouped command buttons and operational tooltips.</purpose>
+      <path>src/Core/RibbonBuilder.cs</path>
+      <depends>M-ENTRY-COMMANDS, M-CONFIG, M-LOGGING</depends>
+      <annotations>
+        <fn-buildRibbon PURPOSE="Create ribbon tab and operational panels" />
+        <fn-createButton PURPOSE="Create command button with mixed tooltip guidance" />
+      </annotations>
+    </M-RIBBON>
+    <M-DOCS-COMMANDS NAME="CommandsGuide" TYPE="UTILITY">
+      <purpose>Provide operator-facing command manual with prerequisites and step-by-step usage.</purpose>
+      <path>docs/COMMANDS.md</path>
+      <depends>M-ENTRY-COMMANDS, M-SETTINGS, M-EXPORT</depends>
+      <annotations>
+        <fn-command-matrix PURPOSE="Describe each command, prerequisites, and result" />
+        <fn-quick-start PURPOSE="Define minimal startup flow for first use" />
+      </annotations>
+    </M-DOCS-COMMANDS>
+    <M-CONFIG NAME="PluginConfig" TYPE="UTILITY">
+      <purpose>Canonical constants for Russian attributes, commands, EOM_DATA keys, install-type rules, and Excel contract.</purpose>
+      <path>src/Shared/PluginConfig.cs</path>
+      <depends>none</depends>
+      <annotations>
+        <type-ConfigKeys PURPOSE="Configuration constants set" />
+        <type-ExcelContract PURPOSE="INPUT/OUTPUT worksheet contract" />
+      </annotations>
+    </M-CONFIG>
+    <M-ASSEMBLY-REGISTRATION NAME="AssemblyRegistration" TYPE="ENTRY_POINT">
+      <purpose>Register assembly-level ExtensionApplication and CommandClass for AutoCAD loader.</purpose>
+      <path>src/AssemblyRegistration.cs</path>
+      <depends>M-PLUGIN-LIFECYCLE, M-ENTRY-COMMANDS</depends>
+      <annotations>
+        <fn-registerExtension PURPOSE="Register extension entry point and command container" />
+      </annotations>
+    </M-ASSEMBLY-REGISTRATION>
+    <M-PLUGIN-LIFECYCLE NAME="PluginApp" TYPE="ENTRY_POINT">
+      <purpose>Initialize plugin lifecycle and ribbon bootstrap on AutoCAD startup.</purpose>
+      <path>src/Core/PluginApp.cs</path>
+      <depends>M-RIBBON, M-ENTRY-COMMANDS, M-LOGGING</depends>
+      <annotations>
+        <fn-initialize PURPOSE="Initialize plugin runtime and ribbon" />
+        <fn-terminate PURPOSE="Terminate plugin runtime" />
+      </annotations>
+    </M-PLUGIN-LIFECYCLE>
+    <M-EXCEL-GATEWAY NAME="ExcelGateway" TYPE="INTEGRATION">
+      <purpose>Provide Excel INPUT/OUTPUT gateway abstraction and CSV fallback implementation.</purpose>
+      <path>src/Integrations/ExcelGateway.cs</path>
+      <depends>M-CONFIG, M-MODELS</depends>
+      <annotations>
+        <type-IExcelGateway PURPOSE="Excel read/write abstraction" />
+        <fn-writeInputRows PURPOSE="Write INPUT rows to template-compatible output" />
+        <fn-readOutputRows PURPOSE="Read OUTPUT rows from template-compatible source" />
+      </annotations>
+    </M-EXCEL-GATEWAY>
+    <M-HARDWARE-PROBE NAME="HardwareProbeAdapter" TYPE="INTEGRATION">
+      <purpose>Read machine hardware fingerprint for licensing checks.</purpose>
+      <path>src/Integrations/HardwareProbeAdapter.cs</path>
+      <depends>none</depends>
+      <annotations>
+        <fn-getHardwareId PURPOSE="Read hardware id via WMI" />
+      </annotations>
+    </M-HARDWARE-PROBE>
+    <M-JSON-ADAPTER NAME="JsonAdapter" TYPE="INTEGRATION">
+      <purpose>Serialize and deserialize plugin models using Newtonsoft.Json.</purpose>
+      <path>src/Integrations/JsonAdapter.cs</path>
+      <depends>none</depends>
+      <annotations>
+        <fn-serialize PURPOSE="Serialize model to JSON string" />
+        <fn-deserialize PURPOSE="Deserialize JSON string to model" />
+      </annotations>
+    </M-JSON-ADAPTER>
+    <M-MODELS NAME="DomainModels" TYPE="DATA_LAYER">
+      <purpose>Define immutable domain models shared by mapping, trace, spec, layout, and licensing flows.</purpose>
+      <path>src/Models/DomainModels.cs</path>
+      <depends>none</depends>
+      <annotations>
+        <type-DomainModels PURPOSE="Shared record and enum model set" />
+      </annotations>
+    </M-MODELS>
+    <M-INSTALL-TYPE-RESOLVER NAME="InstallTypeResolver" TYPE="CORE_LOGIC">
+      <purpose>Resolve install type by linetype/layer rules with deterministic priority.</purpose>
+      <path>src/Services/InstallTypeResolver.cs</path>
+      <depends>M-SETTINGS, M-CONFIG, M-MODELS</depends>
+      <annotations>
+        <fn-resolveInstallType PURPOSE="Resolve install type by prioritized rules" />
+      </annotations>
+    </M-INSTALL-TYPE-RESOLVER>
+    <M-LICENSE NAME="LicenseService" TYPE="CORE_LOGIC">
+      <purpose>Validate command execution license state using hardware fingerprint and settings.</purpose>
+      <path>src/Services/LicenseService.cs</path>
+      <depends>M-HARDWARE-PROBE, M-SETTINGS, M-LOGGING, M-MODELS</depends>
+      <annotations>
+        <fn-validateLicense PURPOSE="Validate current license state" />
+      </annotations>
+    </M-LICENSE>
+    <M-MAP-CONFIG-VM NAME="MappingConfigWindowViewModel" TYPE="UI_COMPONENT">
+      <purpose>Provide mapping configuration state, validation, and persistence commands.</purpose>
+      <path>src/UI/MappingConfigWindowViewModel.cs</path>
+      <depends>M-SETTINGS, M-LOGGING, M-MODELS</depends>
+      <annotations>
+        <fn-loadProfile PURPOSE="Load mapping profile into editable collection" />
+        <fn-saveProfile PURPOSE="Validate and persist profile changes" />
+      </annotations>
+    </M-MAP-CONFIG-VM>
+    <M-MAP-CONFIG-UI NAME="MappingConfigWindow" TYPE="UI_COMPONENT">
+      <purpose>Render mapping configuration WPF window and bind it to view-model.</purpose>
+      <path>src/UI/MappingConfigWindow.cs</path>
+      <depends>M-MAP-CONFIG-VM</depends>
+      <annotations>
+        <fn-buildLayout PURPOSE="Build window layout and bindings" />
+        <fn-createGrid PURPOSE="Create editable mapping rules grid" />
+      </annotations>
+    </M-MAP-CONFIG-UI>
+    <M-GLOBAL-USINGS NAME="GlobalUsings" TYPE="UTILITY">
+      <purpose>Define global using directives shared across plugin compilation units.</purpose>
+      <path>src/GlobalUsings.cs</path>
+      <depends>none</depends>
+      <annotations>
+        <type-GlobalUsings PURPOSE="Shared namespace import set" />
+      </annotations>
+    </M-GLOBAL-USINGS>
+    <M-PANEL-LAYOUT-CONFIG-VM NAME="PanelLayoutConfigWindowViewModel" TYPE="UI_COMPONENT">
+      <purpose>Provide editable panel layout mapping state and persistence logic for selector and legacy rules.</purpose>
+      <path>src/UI/PanelLayoutConfigWindowViewModel.cs</path>
+      <depends>M-SETTINGS, M-LOGGING, M-MODELS, M-CONFIG</depends>
+      <annotations>
+        <fn-loadMap PURPOSE="Load panel layout map into UI collections" />
+        <fn-pickAndAddSelectorRule PURPOSE="Pick SOURCE and LAYOUT blocks from drawing and append rule" />
+        <fn-saveMap PURPOSE="Validate and save panel layout map configuration" />
+      </annotations>
+    </M-PANEL-LAYOUT-CONFIG-VM>
+    <M-PANEL-LAYOUT-CONFIG-UI NAME="PanelLayoutConfigWindow" TYPE="UI_COMPONENT">
+      <purpose>Render panel layout configuration window and execute drawing pick actions from UI controls.</purpose>
+      <path>src/UI/PanelLayoutConfigWindow.cs</path>
+      <depends>M-PANEL-LAYOUT-CONFIG-VM, M-CAD-CONTEXT</depends>
+      <annotations>
+        <fn-buildLayout PURPOSE="Build WPF layout for selector and legacy mapping sections" />
+        <fn-runPickActions PURPOSE="Run SOURCE/LAYOUT selection actions from UI buttons" />
+      </annotations>
+    </M-PANEL-LAYOUT-CONFIG-UI>
+    <CrossLink from="M-ENTRY-COMMANDS" to="M-MAP-ORCHESTRATOR" relation="uses" />
+    <CrossLink from="M-ENTRY-COMMANDS" to="M-TRACE-ORCHESTRATOR" relation="uses" />
+    <CrossLink from="M-ENTRY-COMMANDS" to="M-SPEC-ORCHESTRATOR" relation="uses" />
+    <CrossLink from="M-ENTRY-COMMANDS" to="M-SELECTION" relation="uses" />
+    <CrossLink from="M-ENTRY-COMMANDS" to="M-EXPORT" relation="uses" />
+    <CrossLink from="M-ENTRY-COMMANDS" to="M-SETTINGS" relation="uses" />
+    <CrossLink from="M-ENTRY-COMMANDS" to="M-XDATA" relation="uses" />
+    <CrossLink from="M-ENTRY-COMMANDS" to="M-CAD-CONTEXT" relation="uses" />
+    <CrossLink from="M-ENTRY-COMMANDS" to="M-LOGGING" relation="uses" />
+    <CrossLink from="M-ENTRY-COMMANDS" to="M-LICENSE" relation="uses" />
+    <CrossLink from="M-ENTRY-COMMANDS" to="M-PANEL-LAYOUT-CONFIG-UI" relation="uses" />
+    <CrossLink from="M-ENTRY-COMMANDS" to="M-PANEL-LAYOUT-CONFIG-VM" relation="uses" />
+    <CrossLink from="M-SELECTION" to="M-CAD-CONTEXT" relation="uses" />
+    <CrossLink from="M-SETTINGS" to="M-JSON-ADAPTER" relation="uses" />
+    <CrossLink from="M-SETTINGS" to="M-LOGGING" relation="uses" />
+    <CrossLink from="M-SETTINGS" to="M-CONFIG" relation="uses" />
+    <CrossLink from="M-ATTRIBUTES" to="M-CAD-CONTEXT" relation="uses" />
+    <CrossLink from="M-BLOCK-REPLACE" to="M-CAD-CONTEXT" relation="uses" />
+    <CrossLink from="M-BLOCK-REPLACE" to="M-LOGGING" relation="uses" />
+    <CrossLink from="M-MAP-ORCHESTRATOR" to="M-SELECTION" relation="uses" />
+    <CrossLink from="M-MAP-ORCHESTRATOR" to="M-SETTINGS" relation="uses" />
+    <CrossLink from="M-MAP-ORCHESTRATOR" to="M-BLOCK-REPLACE" relation="uses" />
+    <CrossLink from="M-MAP-ORCHESTRATOR" to="M-LOGGING" relation="uses" />
+    <CrossLink from="M-COORDINATES" to="M-CAD-CONTEXT" relation="uses" />
+    <CrossLink from="M-CABLE-CALC" to="M-COORDINATES" relation="uses" />
+    <CrossLink from="M-CABLE-CALC" to="M-ATTRIBUTES" relation="uses" />
+    <CrossLink from="M-CABLE-CALC" to="M-XDATA" relation="uses" />
+    <CrossLink from="M-CABLE-CALC" to="M-LOGGING" relation="uses" />
+    <CrossLink from="M-CABLE-CALC" to="M-SETTINGS" relation="uses" />
+    <CrossLink from="M-CABLE-CALC" to="M-INSTALL-TYPE-RESOLVER" relation="uses" />
+    <CrossLink from="M-XDATA" to="M-CAD-CONTEXT" relation="uses" />
+    <CrossLink from="M-XDATA" to="M-CONFIG" relation="uses" />
+    <CrossLink from="M-XDATA" to="M-MODELS" relation="uses" />
+    <CrossLink from="M-TRACE-ORCHESTRATOR" to="M-SELECTION" relation="uses" />
+    <CrossLink from="M-TRACE-ORCHESTRATOR" to="M-COORDINATES" relation="uses" />
+    <CrossLink from="M-TRACE-ORCHESTRATOR" to="M-CABLE-CALC" relation="uses" />
+    <CrossLink from="M-TRACE-ORCHESTRATOR" to="M-XDATA" relation="uses" />
+    <CrossLink from="M-TRACE-ORCHESTRATOR" to="M-ATTRIBUTES" relation="uses" />
+    <CrossLink from="M-TRACE-ORCHESTRATOR" to="M-SETTINGS" relation="uses" />
+    <CrossLink from="M-TRACE-ORCHESTRATOR" to="M-LOGGING" relation="uses" />
+    <CrossLink from="M-AGGREGATION" to="M-XDATA" relation="uses" />
+    <CrossLink from="M-AGGREGATION" to="M-SETTINGS" relation="uses" />
+    <CrossLink from="M-AGGREGATION" to="M-LOGGING" relation="uses" />
+    <CrossLink from="M-AGGREGATION" to="M-MODELS" relation="uses" />
+    <CrossLink from="M-EXPORT" to="M-AGGREGATION" relation="uses" />
+    <CrossLink from="M-EXPORT" to="M-CAD-CONTEXT" relation="uses" />
+    <CrossLink from="M-EXPORT" to="M-LOGGING" relation="uses" />
+    <CrossLink from="M-EXPORT" to="M-EXCEL-GATEWAY" relation="uses" />
+    <CrossLink from="M-SPEC-ORCHESTRATOR" to="M-AGGREGATION" relation="uses" />
+    <CrossLink from="M-SPEC-ORCHESTRATOR" to="M-EXPORT" relation="uses" />
+    <CrossLink from="M-SPEC-ORCHESTRATOR" to="M-CAD-CONTEXT" relation="uses" />
+    <CrossLink from="M-SPEC-ORCHESTRATOR" to="M-SETTINGS" relation="uses" />
+    <CrossLink from="M-SPEC-ORCHESTRATOR" to="M-LOGGING" relation="uses" />
+    <CrossLink from="M-SPEC-ORCHESTRATOR" to="M-SELECTION" relation="uses" />
+    <CrossLink from="M-LOGGING" to="M-CAD-CONTEXT" relation="uses" />
+    <CrossLink from="M-RIBBON" to="M-ENTRY-COMMANDS" relation="uses" />
+    <CrossLink from="M-RIBBON" to="M-CONFIG" relation="uses" />
+    <CrossLink from="M-RIBBON" to="M-LOGGING" relation="uses" />
+    <CrossLink from="M-DOCS-COMMANDS" to="M-ENTRY-COMMANDS" relation="uses" />
+    <CrossLink from="M-DOCS-COMMANDS" to="M-SETTINGS" relation="uses" />
+    <CrossLink from="M-DOCS-COMMANDS" to="M-EXPORT" relation="uses" />
+    <CrossLink from="M-ASSEMBLY-REGISTRATION" to="M-PLUGIN-LIFECYCLE" relation="uses" />
+    <CrossLink from="M-ASSEMBLY-REGISTRATION" to="M-ENTRY-COMMANDS" relation="uses" />
+    <CrossLink from="M-PLUGIN-LIFECYCLE" to="M-RIBBON" relation="uses" />
+    <CrossLink from="M-PLUGIN-LIFECYCLE" to="M-ENTRY-COMMANDS" relation="uses" />
+    <CrossLink from="M-PLUGIN-LIFECYCLE" to="M-LOGGING" relation="uses" />
+    <CrossLink from="M-EXCEL-GATEWAY" to="M-CONFIG" relation="uses" />
+    <CrossLink from="M-EXCEL-GATEWAY" to="M-MODELS" relation="uses" />
+    <CrossLink from="M-INSTALL-TYPE-RESOLVER" to="M-SETTINGS" relation="uses" />
+    <CrossLink from="M-INSTALL-TYPE-RESOLVER" to="M-CONFIG" relation="uses" />
+    <CrossLink from="M-INSTALL-TYPE-RESOLVER" to="M-MODELS" relation="uses" />
+    <CrossLink from="M-LICENSE" to="M-HARDWARE-PROBE" relation="uses" />
     <CrossLink from="M-LICENSE" to="M-SETTINGS" relation="uses" />
-    <CrossLink from="M-LICENSE" to="M-LOG" relation="uses" />
-
-    <CrossLink from="M-ATTR" to="M-ACAD" relation="uses" />
-    <CrossLink from="M-GEOM" to="M-ACAD" relation="uses" />
-    <CrossLink from="M-XDATA" to="M-ACAD" relation="uses" />
-
-    <CrossLink from="M-MAP" to="M-SETTINGS" relation="uses" />
-    <CrossLink from="M-MAP" to="M-ATTR" relation="uses" />
-    <CrossLink from="M-MAP" to="M-ACAD" relation="uses" />
-    <CrossLink from="M-MAP" to="M-LOG" relation="uses" />
-
-    <CrossLink from="M-TRACE" to="M-GEOM" relation="uses" />
-    <CrossLink from="M-TRACE" to="M-ATTR" relation="uses" />
-    <CrossLink from="M-TRACE" to="M-XDATA" relation="uses" />
-    <CrossLink from="M-TRACE" to="M-LOG" relation="uses" />
-
-    <CrossLink from="M-SPEC" to="M-XDATA" relation="uses" />
-    <CrossLink from="M-SPEC" to="M-SETTINGS" relation="uses" />
-    <CrossLink from="M-SPEC" to="M-LOG" relation="uses" />
-
-    <CrossLink from="M-EXPORT" to="M-SPEC" relation="uses" />
-    <CrossLink from="M-EXPORT" to="M-ACAD" relation="uses" />
-    <CrossLink from="M-EXPORT" to="M-LOG" relation="uses" />
+    <CrossLink from="M-LICENSE" to="M-LOGGING" relation="uses" />
+    <CrossLink from="M-LICENSE" to="M-MODELS" relation="uses" />
+    <CrossLink from="M-MAP-CONFIG-VM" to="M-SETTINGS" relation="uses" />
+    <CrossLink from="M-MAP-CONFIG-VM" to="M-LOGGING" relation="uses" />
+    <CrossLink from="M-MAP-CONFIG-VM" to="M-MODELS" relation="uses" />
+    <CrossLink from="M-MAP-CONFIG-UI" to="M-MAP-CONFIG-VM" relation="uses" />
+    <CrossLink from="M-PANEL-LAYOUT-CONFIG-VM" to="M-SETTINGS" relation="uses" />
+    <CrossLink from="M-PANEL-LAYOUT-CONFIG-VM" to="M-LOGGING" relation="uses" />
+    <CrossLink from="M-PANEL-LAYOUT-CONFIG-VM" to="M-MODELS" relation="uses" />
+    <CrossLink from="M-PANEL-LAYOUT-CONFIG-VM" to="M-CONFIG" relation="uses" />
+    <CrossLink from="M-PANEL-LAYOUT-CONFIG-UI" to="M-PANEL-LAYOUT-CONFIG-VM" relation="uses" />
+    <CrossLink from="M-PANEL-LAYOUT-CONFIG-UI" to="M-CAD-CONTEXT" relation="uses" />
   </Project>
 </KnowledgeGraph>

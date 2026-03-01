@@ -3,8 +3,8 @@
 // START_MODULE_CONTRACT
 //   PURPOSE: Read and write block attributes with robust Cyrillic support.
 //   SCOPE: Attribute extraction and update for BlockReference entities.
-//   DEPENDS: M-ACAD
-//   LINKS: M-ATTR, M-ACAD
+//   DEPENDS: M-CAD-CONTEXT
+//   LINKS: M-ATTRIBUTES, M-CAD-CONTEXT
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP
@@ -73,3 +73,4 @@ public class AttributeService
         // END_BLOCK_WRITE_ATTRIBUTES
     }
 }
+

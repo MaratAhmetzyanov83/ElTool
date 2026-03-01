@@ -1,10 +1,10 @@
-// FILE: src/Integrations/ExcelGateway.cs
+﻿// FILE: src/Integrations/ExcelGateway.cs
 // VERSION: 1.0.0
 // START_MODULE_CONTRACT
 //   PURPOSE: Define abstract gateway for Excel template I/O and provide default CSV-compatible fallback implementation.
 //   SCOPE: INPUT sheet export and OUTPUT sheet import contract.
-//   DEPENDS: M-CONFIG
-//   LINKS: M-EXPORT, M-CONFIG
+//   DEPENDS: M-CONFIG, M-MODELS
+//   LINKS: M-EXCEL-GATEWAY, M-CONFIG, M-MODELS
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP
@@ -33,13 +33,18 @@ public sealed class CsvExcelGateway : IExcelGateway
         // START_BLOCK_WRITE_INPUT_ROWS
         string directory = Path.GetDirectoryName(templatePath) ?? string.Empty;
         string fileName = Path.GetFileNameWithoutExtension(templatePath);
+        if (!string.IsNullOrWhiteSpace(directory) && !Directory.Exists(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
         string output = Path.Combine(string.IsNullOrWhiteSpace(directory) ? "." : directory, $"{fileName}.INPUT.csv");
 
         var lines = new List<string>
         {
             string.Join(Separator, new[]
             {
-                "ЩИТ","ГРУППА","МОЩНОСТЬ_кВт","НАПРЯЖЕНИЕ","ДЛИНА_м","ДЛИНА_ПОТОЛОК_м","ДЛИНА_ПОЛ_м","ДЛИНА_СТОЯК_м","ФАЗА","ТИП_ГРУППЫ"
+                "Р©РРў","Р“Р РЈРџРџРђ","РњРћР©РќРћРЎРўР¬_РєР’С‚","РќРђРџР РЇР–Р•РќРР•","Р”Р›РРќРђ_Рј","Р”Р›РРќРђ_РџРћРўРћР›РћРљ_Рј","Р”Р›РРќРђ_РџРћР›_Рј","Р”Р›РРќРђ_РЎРўРћРЇРљ_Рј","Р¤РђР—Рђ","РўРРџ_Р“Р РЈРџРџР«"
             })
         };
 
@@ -116,3 +121,4 @@ public sealed class CsvExcelGateway : IExcelGateway
         // END_BLOCK_ESCAPE_VALUE
     }
 }
+

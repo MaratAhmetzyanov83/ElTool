@@ -3,8 +3,8 @@
 // START_MODULE_CONTRACT
 //   PURPOSE: Compute lengths and geometry metrics with mandatory UCS to WCS normalization.
 //   SCOPE: UCS->WCS route conversion and cable length formula.
-//   DEPENDS: M-ACAD
-//   LINKS: M-GEOM, M-ACAD
+//   DEPENDS: M-CAD-CONTEXT
+//   LINKS: M-COORDINATES, M-CAD-CONTEXT
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP
@@ -37,3 +37,4 @@ public class GeometryService
         // END_BLOCK_CALCULATE_CABLE_LENGTH
     }
 }
+

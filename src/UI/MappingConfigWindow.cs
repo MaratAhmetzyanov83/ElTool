@@ -1,10 +1,10 @@
-// FILE: src/UI/MappingConfigWindow.cs
+﻿// FILE: src/UI/MappingConfigWindow.cs
 // VERSION: 1.0.0
 // START_MODULE_CONTRACT
 //   PURPOSE: Render Russian mapping configuration UI and bind it to MappingConfigWindowViewModel.
 //   SCOPE: Build modal WPF window with profile editor, rules grid, commands, and status bar.
-//   DEPENDS: M-SETTINGS, M-LOG
-//   LINKS: M-MAP, M-SETTINGS, M-LOG
+//   DEPENDS: M-MAP-CONFIG-VM
+//   LINKS: M-MAP-CONFIG-UI, M-MAP-CONFIG-VM
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP
@@ -68,7 +68,7 @@ public sealed class MappingConfigWindow : Window
 
         var reloadButton = new Button
         {
-            Content = "Обновить",
+            Content = "РћР±РЅРѕРІРёС‚СЊ",
             Width = 110,
             Height = 30,
             Margin = new Thickness(0, 0, 8, 0)
@@ -79,7 +79,7 @@ public sealed class MappingConfigWindow : Window
 
         var saveButton = new Button
         {
-            Content = "Сохранить",
+            Content = "РЎРѕС…СЂР°РЅРёС‚СЊ",
             Width = 120,
             Height = 30
         };
@@ -115,10 +115,10 @@ public sealed class MappingConfigWindow : Window
             Margin = new Thickness(0, 8, 0, 0)
         };
 
-        var addButton = new Button { Content = "Добавить правило", Width = 150, Height = 28, Margin = new Thickness(0, 0, 8, 0) };
+        var addButton = new Button { Content = "Р”РѕР±Р°РІРёС‚СЊ РїСЂР°РІРёР»Рѕ", Width = 150, Height = 28, Margin = new Thickness(0, 0, 8, 0) };
         addButton.SetBinding(Button.CommandProperty, new Binding(nameof(MappingConfigWindowViewModel.AddRuleCommand)));
 
-        var removeButton = new Button { Content = "Удалить выбранное", Width = 150, Height = 28 };
+        var removeButton = new Button { Content = "РЈРґР°Р»РёС‚СЊ РІС‹Р±СЂР°РЅРЅРѕРµ", Width = 150, Height = 28 };
         removeButton.SetBinding(Button.CommandProperty, new Binding(nameof(MappingConfigWindowViewModel.RemoveSelectedRuleCommand)));
 
         actions.Children.Add(addButton);
@@ -164,7 +164,7 @@ public sealed class MappingConfigWindow : Window
 
         var sourceColumn = new DataGridTextColumn
         {
-            Header = "Исходный блок",
+            Header = "РСЃС…РѕРґРЅС‹Р№ Р±Р»РѕРє",
             Binding = new Binding(nameof(MappingRuleItem.SourceBlockName))
             {
                 Mode = BindingMode.TwoWay,
@@ -175,7 +175,7 @@ public sealed class MappingConfigWindow : Window
 
         var targetColumn = new DataGridTextColumn
         {
-            Header = "Целевой блок",
+            Header = "Р¦РµР»РµРІРѕР№ Р±Р»РѕРє",
             Binding = new Binding(nameof(MappingRuleItem.TargetBlockName))
             {
                 Mode = BindingMode.TwoWay,
@@ -186,7 +186,7 @@ public sealed class MappingConfigWindow : Window
 
         var sourceTagColumn = new DataGridTextColumn
         {
-            Header = "Тег высоты (источник)",
+            Header = "РўРµРі РІС‹СЃРѕС‚С‹ (РёСЃС‚РѕС‡РЅРёРє)",
             Binding = new Binding(nameof(MappingRuleItem.HeightSourceTag))
             {
                 Mode = BindingMode.TwoWay,
@@ -197,7 +197,7 @@ public sealed class MappingConfigWindow : Window
 
         var targetTagColumn = new DataGridTextColumn
         {
-            Header = "Тег высоты (цель)",
+            Header = "РўРµРі РІС‹СЃРѕС‚С‹ (С†РµР»СЊ)",
             Binding = new Binding(nameof(MappingRuleItem.HeightTargetTag))
             {
                 Mode = BindingMode.TwoWay,
@@ -214,3 +214,4 @@ public sealed class MappingConfigWindow : Window
         // END_BLOCK_CREATE_GRID
     }
 }
+

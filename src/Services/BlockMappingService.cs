@@ -3,8 +3,8 @@
 // START_MODULE_CONTRACT
 //   PURPOSE: Replace source blocks with a selected target block in drawing.
 //   SCOPE: Source/target template detection, in-place block replacement, replacement summary.
-//   DEPENDS: M-ACAD, M-LOG
-//   LINKS: M-MAP, M-ACAD, M-LOG
+//   DEPENDS: M-CAD-CONTEXT, M-LOGGING
+//   LINKS: M-BLOCK-REPLACE, M-CAD-CONTEXT, M-LOGGING
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP
@@ -127,3 +127,4 @@ public class BlockMappingService
         // END_BLOCK_SAFE_SCALE_RATIO
     }
 }
+

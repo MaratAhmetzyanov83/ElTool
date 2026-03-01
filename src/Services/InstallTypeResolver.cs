@@ -3,8 +3,8 @@
 // START_MODULE_CONTRACT
 //   PURPOSE: Resolve install type by linetype/layer rules with deterministic priority and default fallback.
 //   SCOPE: Runtime matching for EOM_TRACE aggregation and validation.
-//   DEPENDS: M-SETTINGS
-//   LINKS: M-CABLE-CALC, M-SETTINGS
+//   DEPENDS: M-SETTINGS, M-CONFIG, M-MODELS
+//   LINKS: M-INSTALL-TYPE-RESOLVER, M-SETTINGS, M-CONFIG, M-MODELS, M-CABLE-CALC
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP
@@ -43,3 +43,4 @@ public sealed class InstallTypeResolver : IInstallTypeResolver
         // END_BLOCK_RESOLVE_INSTALL_TYPE
     }
 }
+

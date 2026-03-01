@@ -3,8 +3,8 @@
 // START_MODULE_CONTRACT
 //   PURPOSE: Write operational diagnostics to AutoCAD editor and optional sinks.
 //   SCOPE: Contextual logging for plugin operations.
-//   DEPENDS: M-ACAD
-//   LINKS: M-LOG, M-ACAD
+//   DEPENDS: M-CAD-CONTEXT
+//   LINKS: M-LOGGING, M-CAD-CONTEXT
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP
@@ -32,3 +32,4 @@ public class LogService
         // END_BLOCK_WRITE_EDITOR_LOG
     }
 }
+

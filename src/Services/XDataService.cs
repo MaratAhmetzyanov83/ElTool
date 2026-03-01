@@ -3,8 +3,8 @@
 // START_MODULE_CONTRACT
 //   PURPOSE: Read and write structured XData with application key EOM_DATA.
 //   SCOPE: Stores and retrieves plugin payload on AutoCAD entities.
-//   DEPENDS: M-ACAD
-//   LINKS: M-XDATA, M-ACAD
+//   DEPENDS: M-CAD-CONTEXT, M-CONFIG, M-MODELS
+//   LINKS: M-XDATA, M-CAD-CONTEXT, M-CONFIG, M-MODELS
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP
@@ -248,3 +248,4 @@ public class XDataService
         // END_BLOCK_UPSERT_APP_XDATA
     }
 }
+

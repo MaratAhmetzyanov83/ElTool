@@ -3,8 +3,8 @@
 // START_MODULE_CONTRACT
 //   PURPOSE: Trace selected route and compute cable length including vertical delta and reserve.
 //   SCOPE: Polyline lookup, height extraction, formula calculation, XData write.
-//   DEPENDS: M-GEOM, M-ATTR, M-XDATA, M-LOG
-//   LINKS: M-TRACE, M-GEOM, M-ATTR, M-XDATA, M-LOG
+//   DEPENDS: M-COORDINATES, M-ATTRIBUTES, M-XDATA, M-LOGGING, M-SETTINGS, M-INSTALL-TYPE-RESOLVER
+//   LINKS: M-CABLE-CALC, M-COORDINATES, M-ATTRIBUTES, M-XDATA, M-LOGGING, M-SETTINGS, M-INSTALL-TYPE-RESOLVER
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP
@@ -298,3 +298,4 @@ public class CableTraceService
         public Dictionary<string, double> LengthByInstallType { get; } = new(StringComparer.OrdinalIgnoreCase);
     }
 }
+

@@ -4,7 +4,7 @@
 //   PURPOSE: Read hardware identifiers via System.Management for licensing.
 //   SCOPE: Produces stable machine identifier based on WMI data.
 //   DEPENDS: none
-//   LINKS: M-SYSMGMT
+//   LINKS: M-HARDWARE-PROBE
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP
@@ -40,3 +40,4 @@ public class HardwareProbeAdapter
         // END_BLOCK_GET_HARDWARE_ID
     }
 }
+

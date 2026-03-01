@@ -3,8 +3,8 @@
 // START_MODULE_CONTRACT
 //   PURPOSE: Bootstrap plugin lifecycle and compose startup services.
 //   SCOPE: Initialize ribbon and command entry infrastructure.
-//   DEPENDS: M-RIBBON, M-COMMANDS, M-LOG
-//   LINKS: M-ENTRY, M-RIBBON, M-COMMANDS, M-LOG
+//   DEPENDS: M-RIBBON, M-ENTRY-COMMANDS, M-LOGGING
+//   LINKS: M-PLUGIN-LIFECYCLE, M-RIBBON, M-ENTRY-COMMANDS, M-LOGGING
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP
@@ -68,3 +68,4 @@ public class PluginApp : IExtensionApplication
         // END_BLOCK_PLUGIN_TRY_BUILD_RIBBON
     }
 }
+

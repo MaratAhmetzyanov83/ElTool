@@ -1,5 +1,5 @@
 ﻿// FILE: src/Models/DomainModels.cs
-// VERSION: 1.0.0
+// VERSION: 1.2.0
 // START_MODULE_CONTRACT
 //   PURPOSE: Define shared domain models used by mapping, tracing, licensing, and specification workflows.
 //   SCOPE: Immutable records for operational data, settings root model, and license state enum.
@@ -12,6 +12,7 @@
 //   TraceRequest/TraceResult - Cable trace input and calculated output model.
 //   EomDataRecord/SpecificationRow - Persisted EOM data and grouped specification row.
 //   SettingsModel/LicenseState - Plugin settings root and license validation state.
+//   PanelLayoutMapConfig/OlsSelectedDevice - OLS selection parsing and selector/legacy layout mapping models.
 // END_MODULE_MAP
 namespace ElTools.Models;
 
@@ -59,6 +60,50 @@ public sealed record ExcelOutputRow(
     int RcdModules,
     string? Note = null);
 public sealed record ValidationIssue(string Code, ObjectId EntityId, string Message, string Severity = "Warning");
+public sealed record OlsSelectedDevice(
+    ObjectId EntityId,
+    string SourceBlockName,
+    OlsSourceSignature SourceSignature,
+    string? DeviceKey,
+    int Modules,
+    string? Group,
+    string? Note,
+    Point3d InsertionPoint);
+public sealed record OlsSourceSignature(
+    string SourceBlockName,
+    string? VisibilityValue = null);
+public sealed record SkippedOlsDeviceIssue(
+    ObjectId EntityId,
+    string Reason,
+    string? DeviceKey = null,
+    string? SourceBlockName = null);
+public sealed record PanelLayoutSelectorRule(
+    int Priority,
+    string SourceBlockName,
+    string? VisibilityValue,
+    string LayoutBlockName,
+    int? FallbackModules = null);
+public sealed record PanelLayoutMapRule(
+    string DeviceKey,
+    string LayoutBlockName,
+    int? FallbackModules = null);
+
+public sealed class PanelLayoutAttributeTags
+{
+    public string Device { get; set; } = "АППАРАТ";
+    public string Modules { get; set; } = "МОДУЛЕЙ";
+    public string Group { get; set; } = "ГРУППА";
+    public string Note { get; set; } = "ПРИМЕЧАНИЕ";
+}
+
+public sealed class PanelLayoutMapConfig
+{
+    public string Version { get; set; } = "2.0";
+    public int DefaultModulesPerRow { get; set; } = 24;
+    public PanelLayoutAttributeTags AttributeTags { get; set; } = new();
+    public List<PanelLayoutSelectorRule> SelectorRules { get; set; } = new();
+    public List<PanelLayoutMapRule> LayoutMap { get; set; } = new();
+}
 
 public sealed class SettingsModel
 {
